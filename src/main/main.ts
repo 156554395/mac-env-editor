@@ -61,6 +61,8 @@ class EnvEditor {
     ipcMain.handle('save-env-vars', this.handleSaveEnvVars.bind(this))
     ipcMain.handle('backup-config', this.handleBackupConfig.bind(this))
     ipcMain.handle('get-shell-info', this.handleGetShellInfo.bind(this))
+    ipcMain.handle('get-config-file-content', this.handleGetConfigFileContent.bind(this))
+    ipcMain.handle('save-config-file-content', this.handleSaveConfigFileContent.bind(this))
   }
 
   private async handleGetEnvVars() {
@@ -149,6 +151,55 @@ class EnvEditor {
           configPath: path.join(os.homedir(), `.${shellName}rc`),
           activeConfig: this.getPrimaryConfigFile()
         }
+      }
+    } catch (error: any) {
+      return { success: false, error: error?.message || String(error) }
+    }
+  }
+
+  private async handleGetConfigFileContent(event: any, configFile?: string) {
+    try {
+      const targetPath = configFile || this.getPrimaryConfigFile()
+
+      if (await this.fileExists(targetPath)) {
+        const content = await fs.promises.readFile(targetPath, 'utf-8')
+        return {
+          success: true,
+          data: {
+            content,
+            filePath: targetPath,
+            fileName: path.basename(targetPath)
+          }
+        }
+      } else {
+        return {
+          success: true,
+          data: {
+            content: '',
+            filePath: targetPath,
+            fileName: path.basename(targetPath)
+          }
+        }
+      }
+    } catch (error: any) {
+      return { success: false, error: error?.message || String(error) }
+    }
+  }
+
+  private async handleSaveConfigFileContent(event: any, data: { content: string, filePath?: string }) {
+    try {
+      const targetPath = data.filePath || this.getPrimaryConfigFile()
+
+      // 创建备份
+      await this.handleBackupConfig(null, targetPath)
+
+      // 保存新内容
+      await fs.promises.writeFile(targetPath, data.content, 'utf-8')
+
+      return {
+        success: true,
+        message: '配置文件已保存',
+        filePath: targetPath
       }
     } catch (error: any) {
       return { success: false, error: error?.message || String(error) }

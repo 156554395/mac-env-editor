@@ -37,6 +37,7 @@ pnpm install         # 安装所有依赖
   - 自动备份机制
   - Shell 信息检测和管理
   - IPC 消息处理
+  - **源码编辑**: 完整配置文件内容的读取和保存
 
 #### 渲染进程 (Vue 3)
 - **入口**: `src/renderer/src/main.ts` - Vue 应用初始化
@@ -61,11 +62,13 @@ pnpm install         # 安装所有依赖
 - 支持多种 Shell 配置格式 (zsh, bash, profile)
 
 #### 3. IPC 通信架构
-- 主进程提供 4 个核心 IPC 处理器:
+- 主进程提供 6 个核心 IPC 处理器:
   - `get-env-vars` - 读取环境变量
   - `save-env-vars` - 保存环境变量
   - `backup-config` - 创建备份
   - `get-shell-info` - 获取 Shell 信息
+  - `get-config-file-content` - 读取完整配置文件内容（源码编辑）
+  - `save-config-file-content` - 保存完整配置文件内容（源码编辑）
 
 ### 安全特性
 

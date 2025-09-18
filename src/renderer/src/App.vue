@@ -147,6 +147,53 @@
             </el-result>
           </div>
 
+          <!-- 源码编辑视图 -->
+          <div v-else-if="viewType === 'source'" class="source-editor-container">
+            <div v-if="sourceLoading" class="loading-state">
+              <el-skeleton :rows="8" animated />
+              <div class="loading-text">正在加载源码...</div>
+            </div>
+            <div v-else class="source-editor">
+              <div class="source-editor-toolbar">
+                <div class="toolbar-left">
+                  <el-tag type="info" size="large">
+                    <i class="el-icon-document"></i>
+                    {{ sourceFilePath }}
+                  </el-tag>
+                </div>
+                <div class="toolbar-right">
+                  <el-button
+                    type="success"
+                    :icon="'Check'"
+                    @click="saveSourceContent"
+                    :loading="sourceSaving"
+                    :disabled="!hasChanges"
+                    size="large"
+                  >
+                    保存文件
+                  </el-button>
+                </div>
+              </div>
+              <div class="source-editor-content">
+                <el-input
+                  v-model="sourceContent"
+                  type="textarea"
+                  :rows="20"
+                  placeholder="请输入配置文件内容..."
+                  @input="handleSourceContentChange"
+                  class="source-textarea"
+                />
+              </div>
+              <div class="source-editor-footer">
+                <div class="footer-info">
+                  <span class="line-count">行数: {{ sourceContent.split('\n').length }}</span>
+                  <span class="char-count">字符: {{ sourceContent.length }}</span>
+                  <span v-if="hasChanges" class="change-indicator">• 未保存的更改</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div v-else-if="filteredEnvVars.length === 0" class="empty-state">
             <el-result
               icon="info"
@@ -288,6 +335,8 @@ declare global {
       saveEnvVars: (data: EnvData) => Promise<{ success: boolean; message?: string; error?: string }>
       backupConfig: (configFile?: string) => Promise<{ success: boolean; backupPath?: string; error?: string }>
       getShellInfo: () => Promise<{ success: boolean; data?: ShellInfo; error?: string }>
+      getConfigFileContent: (configFile?: string) => Promise<{ success: boolean; data?: { content: string; filePath: string; fileName: string }; error?: string }>
+      saveConfigFileContent: (data: { content: string; filePath?: string }) => Promise<{ success: boolean; message?: string; filePath?: string; error?: string }>
     }
   }
 }
@@ -313,7 +362,8 @@ const categories = ref([
 const viewOptions = [
   { label: '全部', value: 'all' },
   { label: '环境变量', value: 'env' },
-  { label: '别名', value: 'alias' }
+  { label: '别名', value: 'alias' },
+  { label: '源码编辑', value: 'source' }
 ]
 
 // 获取空状态提示文本
@@ -352,6 +402,14 @@ const getPlaceholder = (type: string) => {
 const error = ref('')
 const searchQuery = ref('')
 const hasChanges = ref(false)
+
+// 源码编辑相关状态
+const sourceContent = ref('')
+const originalSourceContent = ref('')
+const sourceFileName = ref('')
+const sourceFilePath = ref('')
+const sourceLoading = ref(false)
+const sourceSaving = ref(false)
 
 // 添加变量对话框
 const dialogVisible = ref(false)
@@ -716,10 +774,6 @@ const showAddDialog = () => {
   dialogVisible.value = true
 }
 
-const handleViewTypeChange = () => {
-  selectedCategory.value = 'all'
-}
-
 const handleAdd = (type?: 'env' | 'alias') => {
   newVar.type = type || 'env'
   newVar.key = ''
@@ -760,8 +814,71 @@ const getCurrentTitle = () => {
       return '环境变量'
     case 'alias':
       return '别名'
+    case 'source':
+      return `源码编辑 - ${sourceFileName.value || '配置文件'}`
     default:
       return '环境变量'
+  }
+}
+
+// 源码编辑功能
+const loadSourceContent = async () => {
+  sourceLoading.value = true
+
+  try {
+    const result = await window.electronAPI.getConfigFileContent()
+
+    if (result.success && result.data) {
+      sourceContent.value = result.data.content
+      originalSourceContent.value = result.data.content
+      sourceFileName.value = result.data.fileName
+      sourceFilePath.value = result.data.filePath
+    } else {
+      ElMessage.error(result.error || '加载配置文件失败')
+    }
+  } catch (err: any) {
+    ElMessage.error(`加载失败: ${err?.message || String(err)}`)
+  } finally {
+    sourceLoading.value = false
+  }
+}
+
+const saveSourceContent = async () => {
+  sourceSaving.value = true
+
+  try {
+    const result = await window.electronAPI.saveConfigFileContent({
+      content: sourceContent.value,
+      filePath: sourceFilePath.value
+    })
+
+    if (result.success) {
+      originalSourceContent.value = sourceContent.value
+      ElMessage.success(result.message || '配置文件已保存')
+      // 重新加载环境变量数据
+      await loadData()
+    } else {
+      ElMessage.error(result.error || '保存失败')
+    }
+  } catch (err: any) {
+    ElMessage.error(`保存失败: ${err?.message || String(err)}`)
+  } finally {
+    sourceSaving.value = false
+  }
+}
+
+const handleSourceContentChange = () => {
+  // 检查源码是否有变化
+  const hasSourceChanges = sourceContent.value !== originalSourceContent.value
+  hasChanges.value = hasSourceChanges
+}
+
+const handleViewTypeChange = () => {
+  selectedCategory.value = 'all'
+
+  // 如果切换到源码编辑模式，加载源码内容
+  if (viewType.value === 'source') {
+    loadSourceContent()
   }
 }
 
@@ -1214,5 +1331,75 @@ onMounted(() => {
   .search-input {
     width: 100%;
   }
+}
+
+/* 源码编辑器样式 */
+.source-editor-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.source-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.source-editor-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(249, 250, 251, 0.8);
+}
+
+.source-editor-content {
+  flex: 1;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.source-textarea {
+  flex: 1;
+}
+
+.source-textarea .el-textarea__inner {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: none;
+  min-height: 500px !important;
+  background: rgba(248, 250, 252, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.source-textarea .el-textarea__inner:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(103, 126, 234, 0.2);
+}
+
+.source-editor-footer {
+  padding: 16px 24px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(249, 250, 251, 0.5);
+}
+
+.footer-info {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.change-indicator {
+  color: #f59e0b;
+  font-weight: 600;
 }
 </style>
