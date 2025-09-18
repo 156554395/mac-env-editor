@@ -1,0 +1,55 @@
+{
+  "name": "mac-env-editor",
+  "version": "1.0.0",
+  "description": "一个现代化、直观的 macOS 环境变量和别名管理工具",
+  "main": "dist/main.js",
+  "homepage": "https://github.com/156554395/mac-env-editor",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/156554395/mac-env-editor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/156554395/mac-env-editor/issues"
+  },
+  "scripts": {
+    "dev": "concurrently \"pnpm run dev:main\" \"pnpm run dev:renderer\"",
+    "dev:main": "tsc src/main/*.ts --outDir dist --target es2020 --module commonjs --moduleResolution node && NODE_ENV=development electron dist/main.js",
+    "dev:renderer": "vite",
+    "build": "vue-tsc && vite build && electron-builder",
+    "build:main": "tsc src/main/*.ts --outDir dist --target es2020 --module commonjs --moduleResolution node",
+    "build:renderer": "vue-tsc && vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "lint": "vue-tsc --noEmit",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "keywords": [
+    "electron",
+    "vue3",
+    "typescript",
+    "macos",
+    "environment-variables",
+    "shell-aliases",
+    "config-editor",
+    "zsh",
+    "bash",
+    "dotfiles",
+    "developer-tools"
+  ],
+  "author": "Mac Environment Variable Editor Contributors",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "concurrently": "^9.0.0",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.0.0",
+    "vue": "^3.4.0",
+    "vue-tsc": "^2.0.0"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "element-plus": "^2.7.0"
+  }
+}

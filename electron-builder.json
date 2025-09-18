@@ -1,0 +1,22 @@
+{
+  "appId": "com.yourcompany.mac-env-editor",
+  "productName": "Mac Env Editor",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "node_modules/**/*"
+  ],
+  "mac": {
+    "target": "dmg",
+    "category": "public.app-category.utilities",
+    "hardenedRuntime": false,
+    "entitlements": "entitlements.mac.plist",
+    "entitlementsInherit": "entitlements.mac.plist"
+  },
+  "dmg": {
+    "title": "Mac Env Editor ${version}",
+    "icon": "build/icon.icns"
+  }
+}
