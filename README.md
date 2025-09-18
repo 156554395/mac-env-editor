@@ -14,6 +14,14 @@
 
 </div>
 
+## 📱 软件截图
+
+<div align="center">
+
+![Mac 环境变量编辑器界面](docs/img.png)
+
+</div>
+
 ## 📋 功能特性
 
 ### 🎯 核心功能
