@@ -236,7 +236,14 @@
               <el-table-column prop="key" label="名称" width="250">
                 <template #default="{ row }">
                   <div class="key-cell">
-                    <code class="key-name">{{ row.key }}</code>
+                    <el-input
+                      v-model="row.key"
+                      :class="{ 'invalid-input': !isVarNameValid(row.key) }"
+                      @input="handleKeyChange(row)"
+                      placeholder="变量名称"
+                      size="large"
+                      class="key-input"
+                    />
                     <el-tag
                       v-if="row.category && viewType === 'all'"
                       size="small"
@@ -323,7 +330,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, ArrowDown } from '@element-plus/icons-vue'
 import { EnvironmentVariable, ShellInfo, EnvData } from '../../types'
@@ -410,6 +417,22 @@ const sourceFileName = ref('')
 const sourceFilePath = ref('')
 const sourceLoading = ref(false)
 const sourceSaving = ref(false)
+
+// 自动保存防抖
+let autoSaveTimer: NodeJS.Timeout | null = null
+
+const scheduleAutoSave = () => {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+  }
+
+  autoSaveTimer = setTimeout(async () => {
+    if (hasChanges.value) {
+      console.log('自动保存中...')
+      await saveChangesToFile()
+    }
+  }, 2000) // 2秒后自动保存
+}
 
 // 添加变量对话框
 const dialogVisible = ref(false)
@@ -559,6 +582,22 @@ const handleRefresh = () => {
 const handleValueChange = (row: EnvironmentVariable) => {
   row.isValid = validateEnvironmentVariable(row.key, row.value)
   checkChanges()
+  scheduleAutoSave()
+}
+
+const handleKeyChange = (row: EnvironmentVariable) => {
+  // 验证变量名
+  row.isValid = isVarNameValid(row.key)
+
+  // 更新分类
+  if (row.type === 'env') {
+    row.category = row.key.includes('PATH') ? 'PATH' : '环境变量'
+  } else {
+    row.category = '别名'
+  }
+
+  checkChanges()
+  scheduleAutoSave()
 }
 
 const validateEnvironmentVariable = (key: string, value: string): boolean => {
@@ -604,95 +643,19 @@ const handleAddConfirm = async () => {
       envVars.value.sort((a, b) => a.key.localeCompare(b.key))
 
       // 自动保存到文件
-      try {
-        const envData: EnvData = {
-          env: {},
-          aliases: {}
-        }
+      await saveChangesToFile()
 
-        envVars.value.forEach(item => {
-          if (item.isValid) {
-            if (item.type === 'env') {
-              envData.env[item.key] = item.value
-            } else if (item.type === 'alias') {
-              envData.aliases[item.key] = item.value
-            }
-          }
-        })
-
-        const result = await window.electronAPI.saveEnvVars(envData)
-
-        if (result.success) {
-          originalEnvVars.value = JSON.parse(JSON.stringify(envVars.value))
-          hasChanges.value = false
-          dialogVisible.value = false
-          const itemType = newVar.type === 'alias' ? '别名' : '环境变量'
-          ElMessage.success(`${itemType}已添加并保存`)
-        } else {
-          ElMessage.error(result.error || '保存失败')
-        }
-      } catch (err: any) {
-        ElMessage.error(`保存失败: ${err?.message || String(err)}`)
-      }
+      dialogVisible.value = false
+      const itemType = newVar.type === 'alias' ? '别名' : '环境变量'
+      ElMessage.success(`${itemType}已添加并保存`)
     } else {
       ElMessage.error('请输入有效的名称和值')
     }
   })
 }
 
-const handleDelete = async (index: number) => {
-  const item = filteredEnvVars.value[index]
-  const itemType = item.type === 'alias' ? '别名' : '环境变量'
-
-  ElMessageBox.confirm(
-    `确定要删除${itemType} "${item.key}" 吗？`,
-    '确认删除',
-    {
-      type: 'warning'
-    }
-  ).then(async () => {
-    // 从原数组中找到并删除该项
-    const originalIndex = envVars.value.findIndex(v => v.key === item.key && v.type === item.type)
-    if (originalIndex !== -1) {
-      envVars.value.splice(originalIndex, 1)
-      checkChanges()
-
-      // 自动保存到文件
-      try {
-        const envData: EnvData = {
-          env: {},
-          aliases: {}
-        }
-
-        envVars.value.forEach(item => {
-          if (item.isValid) {
-            if (item.type === 'env') {
-              envData.env[item.key] = item.value
-            } else if (item.type === 'alias') {
-              envData.aliases[item.key] = item.value
-            }
-          }
-        })
-
-        const result = await window.electronAPI.saveEnvVars(envData)
-
-        if (result.success) {
-          originalEnvVars.value = JSON.parse(JSON.stringify(envVars.value))
-          hasChanges.value = false
-          ElMessage.success(`${itemType}已删除并保存`)
-        } else {
-          ElMessage.error(result.error || '删除失败')
-        }
-      } catch (err: any) {
-        ElMessage.error(`删除失败: ${err?.message || String(err)}`)
-      }
-    }
-  }).catch(() => {})
-}
-
-const handleSave = async () => {
-  saving.value = true
-
+// 统一的保存方法
+const saveChangesToFile = async () => {
   try {
     const envData: EnvData = {
       env: {},
@@ -714,12 +677,51 @@ const handleSave = async () => {
     if (result.success) {
       originalEnvVars.value = JSON.parse(JSON.stringify(envVars.value))
       hasChanges.value = false
-      ElMessage.success(result.message || '保存成功')
+      return true
     } else {
       ElMessage.error(result.error || '保存失败')
+      return false
     }
   } catch (err: any) {
     ElMessage.error(`保存失败: ${err?.message || String(err)}`)
+    return false
+  }
+}
+
+const handleDelete = async (index: number) => {
+  const item = filteredEnvVars.value[index]
+  const itemType = item.type === 'alias' ? '别名' : '环境变量'
+
+  ElMessageBox.confirm(
+    `确定要删除${itemType} "${item.key}" 吗？`,
+    '确认删除',
+    {
+      type: 'warning'
+    }
+  ).then(async () => {
+    // 从原数组中找到并删除该项
+    const originalIndex = envVars.value.findIndex(v => v.key === item.key && v.type === item.type)
+    if (originalIndex !== -1) {
+      envVars.value.splice(originalIndex, 1)
+      checkChanges()
+
+      // 自动保存到文件
+      const success = await saveChangesToFile()
+      if (success) {
+        ElMessage.success(`${itemType}已删除并保存`)
+      }
+    }
+  }).catch(() => {})
+}
+
+const handleSave = async () => {
+  saving.value = true
+
+  try {
+    const success = await saveChangesToFile()
+    if (success) {
+      ElMessage.success('保存成功')
+    }
   } finally {
     saving.value = false
   }
@@ -885,6 +887,12 @@ const handleViewTypeChange = () => {
 // 生命周期
 onMounted(() => {
   loadData()
+})
+
+onBeforeUnmount(() => {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+  }
 })
 </script>
 
@@ -1230,6 +1238,31 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.key-input .el-input__wrapper {
+  background: rgba(103, 126, 234, 0.1);
+  border: 1px solid rgba(103, 126, 234, 0.2);
+  border-radius: 6px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.key-input .el-input__inner {
+  color: #667eea;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.key-input .el-input__wrapper:hover {
+  border-color: rgba(103, 126, 234, 0.4);
+}
+
+.key-input .el-input__wrapper.is-focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(103, 126, 234, 0.2);
 }
 
 .key-name {
