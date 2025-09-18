@@ -244,14 +244,6 @@
                       size="large"
                       class="key-input"
                     />
-                    <el-tag
-                      v-if="row.category && viewType === 'all'"
-                      size="small"
-                      :color="getCategoryColor(row.category)"
-                      class="category-tag"
-                    >
-                      {{ row.category }}
-                    </el-tag>
                   </div>
                 </template>
               </el-table-column>
@@ -897,6 +889,21 @@ onBeforeUnmount(() => {
 </script>
 
 <style>
+/* 全局按钮样式 */
+.el-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.el-button .el-button__text-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
 /* 全局样式重置 */
 * {
   box-sizing: border-box;
@@ -976,6 +983,20 @@ onBeforeUnmount(() => {
 .header-actions {
   display: flex;
   gap: 12px;
+}
+
+.header-actions .el-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.header-actions .el-button span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
 }
 
 /* 主体区域 */
