@@ -40,11 +40,19 @@ class EnvEditor {
       }
     })
 
+    // 开发环境使用dev server
     if (process.env.NODE_ENV === 'development') {
       this.mainWindow.loadURL('http://localhost:3000')
       this.mainWindow.webContents.openDevTools()
     } else {
-      this.mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+      // 生产环境加载构建后的文件
+      if (app.isPackaged) {
+        // 打包后的路径，主进程在/dist/main.js，所以__dirname是/dist
+        this.mainWindow.loadFile(path.join(__dirname, 'renderer/index.html'))
+      } else {
+        // 开发构建时的路径
+        this.mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+      }
     }
 
     this.setupIPC()
