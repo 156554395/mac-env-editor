@@ -23,6 +23,7 @@ export interface IPCRenderer {
     filePath?: string
     error?: string
   }>
+  openExternal: (url: string) => Promise<void>
 }
 
 const api: IPCRenderer = {
@@ -33,7 +34,8 @@ const api: IPCRenderer = {
   getConfigFileContent: configFile =>
     ipcRenderer.invoke('get-config-file-content', configFile),
   saveConfigFileContent: data =>
-    ipcRenderer.invoke('save-config-file-content', data)
+    ipcRenderer.invoke('save-config-file-content', data),
+  openExternal: url => ipcRenderer.invoke('open-external', url)
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

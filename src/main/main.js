@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
@@ -64,6 +64,7 @@ class EnvEditor {
         ipcMain.handle('get-shell-info', this.handleGetShellInfo.bind(this));
         ipcMain.handle('get-config-file-content', this.handleGetConfigFileContent.bind(this));
         ipcMain.handle('save-config-file-content', this.handleSaveConfigFileContent.bind(this));
+        ipcMain.handle('open-external', this.handleOpenExternal.bind(this));
     }
     async handleGetEnvVars() {
         try {
@@ -314,6 +315,15 @@ class EnvEditor {
         const shell = process.env.SHELL || '/bin/zsh';
         const shellName = path.basename(shell);
         return path.join(os.homedir(), `.${shellName}rc`);
+    }
+    async handleOpenExternal(event, url) {
+        try {
+            await shell.openExternal(url);
+        }
+        catch (error) {
+            console.error('Failed to open external URL:', error);
+            throw error;
+        }
     }
 }
 new EnvEditor();

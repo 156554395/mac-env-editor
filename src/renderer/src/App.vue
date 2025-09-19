@@ -8,7 +8,6 @@
           <h1 class="app-title">环境变量管理器</h1>
         </div>
         <div v-if="shellInfo" class="shell-info-badge">
-          <span class="shell-name">{{ shellInfo.shellName }}</span>
           <span class="config-path">{{ shellInfo.activeConfig }}</span>
         </div>
       </div>
@@ -39,6 +38,26 @@
         >
           保存更改
         </el-button>
+        <el-dropdown @command="handleDropdownCommand">
+          <el-button type="default" :icon="'MoreFilled'">
+            更多
+            <el-icon class="el-icon--right">
+              <ArrowDown />
+            </el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="feedback">
+                <el-icon><ChatDotRound /></el-icon>
+                问题反馈
+              </el-dropdown-item>
+              <el-dropdown-item command="about">
+                <el-icon><InfoFilled /></el-icon>
+                关于应用
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </div>
 
@@ -128,6 +147,7 @@
               placeholder="搜索环境变量或别名..."
               class="search-input"
               clearable
+              size="large"
               :prefix-icon="'Search'"
             />
             <el-dropdown trigger="click" @command="handleAddCommand">
@@ -176,26 +196,6 @@
               <div class="loading-text">正在加载源码...</div>
             </div>
             <div v-else class="source-editor">
-              <div class="source-editor-toolbar">
-                <div class="toolbar-left">
-                  <el-tag type="info" size="large">
-                    <i class="el-icon-document"></i>
-                    {{ sourceFilePath }}
-                  </el-tag>
-                </div>
-                <div class="toolbar-right">
-                  <el-button
-                    type="success"
-                    :icon="'Check'"
-                    :loading="sourceSaving"
-                    :disabled="!hasChanges"
-                    size="large"
-                    @click="saveSourceContent"
-                  >
-                    保存文件
-                  </el-button>
-                </div>
-              </div>
               <div class="source-editor-content">
                 <el-input
                   v-model="sourceContent"
@@ -336,7 +336,7 @@
         </el-form-item>
         <el-form-item :label="getKeyLabel()" prop="key">
           <el-input
-            v-model="newVar.key"
+            v-model.trim="newVar.key"
             :placeholder="getKeyPlaceholder()"
             :class="{ 'invalid-input': !isVarNameValid(newVar.key) }"
             size="large"
@@ -344,7 +344,7 @@
         </el-form-item>
         <el-form-item :label="getValueLabel()" prop="value">
           <el-input
-            v-model="newVar.value"
+            v-model.trim="newVar.value"
             :placeholder="getValuePlaceholder()"
             size="large"
           />
@@ -368,7 +368,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown } from '@element-plus/icons-vue'
+import { ArrowDown, ChatDotRound, InfoFilled } from '@element-plus/icons-vue'
 import { EnvironmentVariable, ShellInfo, EnvData } from '../../types'
 
 declare global {
@@ -404,6 +404,7 @@ declare global {
         filePath?: string
         error?: string
       }>
+      openExternal: (url: string) => Promise<void>
     }
   }
 }
@@ -697,7 +698,7 @@ const handleAddConfirm = async () => {
 
       // 添加到数组
       envVars.value.push({
-        key: newVar.key.toUpperCase(),
+        key: newVar.key,
         value: newVar.value,
         type: newVar.type,
         isValid: true,
@@ -710,6 +711,16 @@ const handleAddConfirm = async () => {
 
       dialogVisible.value = false
       const itemType = newVar.type === 'alias' ? '别名' : '环境变量'
+
+      // 跳转到对应的类别视图
+      if (newVar.type === 'alias') {
+        viewType.value = 'alias'
+        selectedCategory.value = 'all'
+      } else {
+        viewType.value = 'env'
+        selectedCategory.value = 'all'
+      }
+
       ElMessage.success(`${itemType}已添加并保存`)
     } else {
       ElMessage.error('请输入有效的名称和值')
@@ -781,9 +792,37 @@ const handleSave = async () => {
   saving.value = true
 
   try {
-    const success = await saveChangesToFile()
-    if (success) {
-      ElMessage.success('保存成功')
+    let success = false
+
+    if (viewType.value === 'source') {
+      // 源码编辑模式：保存源码内容
+      sourceSaving.value = true
+      try {
+        const result = await window.electronAPI.saveConfigFileContent({
+          content: sourceContent.value,
+          filePath: sourceFilePath.value
+        })
+
+        if (result.success) {
+          originalSourceContent.value = sourceContent.value
+          ElMessage.success(result.message || '配置文件已保存')
+          // 重新加载环境变量数据
+          await loadData()
+          success = true
+        } else {
+          ElMessage.error(result.error || '保存失败')
+        }
+      } catch (err: any) {
+        ElMessage.error(`保存失败: ${err?.message || String(err)}`)
+      } finally {
+        sourceSaving.value = false
+      }
+    } else {
+      // 普通模式：保存环境变量
+      success = await saveChangesToFile()
+      if (success) {
+        ElMessage.success('保存成功')
+      }
     }
   } finally {
     saving.value = false
@@ -908,30 +947,6 @@ const loadSourceContent = async () => {
   }
 }
 
-const saveSourceContent = async () => {
-  sourceSaving.value = true
-
-  try {
-    const result = await window.electronAPI.saveConfigFileContent({
-      content: sourceContent.value,
-      filePath: sourceFilePath.value
-    })
-
-    if (result.success) {
-      originalSourceContent.value = sourceContent.value
-      ElMessage.success(result.message || '配置文件已保存')
-      // 重新加载环境变量数据
-      await loadData()
-    } else {
-      ElMessage.error(result.error || '保存失败')
-    }
-  } catch (err: any) {
-    ElMessage.error(`保存失败: ${err?.message || String(err)}`)
-  } finally {
-    sourceSaving.value = false
-  }
-}
-
 const handleSourceContentChange = () => {
   // 检查源码是否有变化
   const hasSourceChanges = sourceContent.value !== originalSourceContent.value
@@ -945,6 +960,114 @@ const handleViewTypeChange = () => {
   if (viewType.value === 'source') {
     loadSourceContent()
   }
+}
+
+// 处理下拉菜单命令
+const handleDropdownCommand = (command: string) => {
+  switch (command) {
+    case 'feedback':
+      openGitHubIssue()
+      break
+    case 'about':
+      showAboutDialog()
+      break
+  }
+}
+
+// 打开GitHub Issues页面
+const openGitHubIssue = async () => {
+  const repoUrl = 'https://github.com/156554395/mac-env-editor'
+  const issueUrl = `${repoUrl}/issues/new`
+
+  // 获取系统信息用于问题模板
+  const systemInfo = {
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    appVersion: '1.1.0'
+  }
+
+  const issueTemplate = `
+## 问题描述
+请详细描述您遇到的问题
+
+## 复现步骤
+1.
+2.
+3.
+
+## 期望行为
+请描述您期望的正确行为
+
+## 实际行为
+请描述实际发生的行为
+
+## 系统信息
+- 应用版本: ${systemInfo.appVersion}
+- 操作系统: ${systemInfo.platform}
+- 浏览器: ${systemInfo.userAgent}
+
+## 附加信息
+请提供任何可能有助于解决问题的额外信息
+  `.trim()
+
+  const params = new URLSearchParams({
+    title: '[Bug Report] ',
+    body: issueTemplate,
+    labels: 'bug'
+  })
+
+  const finalUrl = `${issueUrl}?${params.toString()}`
+
+  try {
+    // 使用Electron的shell模块打开外部链接
+    if (window.electronAPI && window.electronAPI.openExternal) {
+      await window.electronAPI.openExternal(finalUrl)
+    } else {
+      // 备用方案：直接使用window.open
+      window.open(finalUrl, '_blank')
+    }
+  } catch (error) {
+    console.error('Failed to open GitHub issue page:', error)
+    ElMessage.error('无法打开GitHub问题反馈页面')
+  }
+}
+
+// 显示关于对话框
+const showAboutDialog = () => {
+  ElMessageBox({
+    title: '关于应用',
+    message: `
+    <div style="text-align: center; padding: 20px;">
+      <h2 style="margin: 0 0 20px 0; color: #409EFF;">Mac 环境变量编辑器</h2>
+      <p style="margin: 10px 0; color: #666;">版本: 1.1.0</p>
+      <p style="margin: 10px 0; color: #666;">一个现代化、直观的 macOS 环境变量和别名管理工具</p>
+      <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+        <p style="margin: 5px 0; color: #999; font-size: 12px;">开发者: 156554395</p>
+      </div>
+    </div>
+    `,
+    dangerouslyUseHTMLString: true,
+    showCancelButton: true,
+    confirmButtonText: '访问GitHub项目',
+    cancelButtonText: '关闭'
+  })
+    .then(async () => {
+      // 点击"访问GitHub项目"按钮时打开GitHub链接
+      try {
+        const repoUrl = 'https://github.com/156554395/mac-env-editor'
+        if (window.electronAPI && window.electronAPI.openExternal) {
+          await window.electronAPI.openExternal(repoUrl)
+        } else {
+          window.open(repoUrl, '_blank')
+        }
+      } catch (error) {
+        console.error('Failed to open GitHub page:', error)
+        ElMessage.error('无法打开GitHub项目页面')
+      }
+    })
+    .catch(() => {
+      // 点击"关闭"按钮或按ESC键，不做任何操作
+    })
 }
 
 // 生命周期

@@ -19,17 +19,20 @@
 ### 安装步骤
 
 1. **Fork 仓库**
+
    ```bash
    # 点击 GitHub 页面右上角的 Fork 按钮
    ```
 
 2. **克隆你的 fork**
+
    ```bash
    git clone https://github.com/156554395/mac-env-editor.git
    cd mac-env-editor
    ```
 
 3. **安装依赖**
+
    ```bash
    pnpm install
    ```
@@ -52,6 +55,7 @@
 ### 提交流程
 
 1. **创建功能分支**
+
    ```bash
    git checkout -b feature/你的功能名称
    ```
@@ -62,12 +66,14 @@
    - 保持提交粒度适中
 
 3. **提交代码**
+
    ```bash
    git add .
    git commit -m "feat: 添加新功能描述"
    ```
 
 4. **推送分支**
+
    ```bash
    git push origin feature/你的功能名称
    ```
@@ -114,6 +120,7 @@
 ```
 
 **类型包括：**
+
 - `feat`: 新功能
 - `fix`: 修复问题
 - `docs`: 文档更新
@@ -123,6 +130,7 @@
 - `chore`: 构建工具或辅助工具的变动
 
 **示例：**
+
 ```
 feat: 添加环境变量批量导入功能
 
@@ -218,6 +226,7 @@ pnpm test:coverage
 ### 版本号规范
 
 遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
+
 - `MAJOR.MINOR.PATCH`
 - 主版本号：不兼容的 API 修改
 - 次版本号：向下兼容的功能性新增
@@ -237,6 +246,7 @@ pnpm test:coverage
 ### 行为守则
 
 我们承诺为每个人提供友善、安全和欢迎的环境，无论：
+
 - 性别、性别认同和表达
 - 性取向
 - 残疾

@@ -5,6 +5,7 @@ const api = {
     backupConfig: configFile => ipcRenderer.invoke('backup-config', configFile),
     getShellInfo: () => ipcRenderer.invoke('get-shell-info'),
     getConfigFileContent: configFile => ipcRenderer.invoke('get-config-file-content', configFile),
-    saveConfigFileContent: data => ipcRenderer.invoke('save-config-file-content', data)
+    saveConfigFileContent: data => ipcRenderer.invoke('save-config-file-content', data),
+    openExternal: url => ipcRenderer.invoke('open-external', url)
 };
 contextBridge.exposeInMainWorld('electronAPI', api);

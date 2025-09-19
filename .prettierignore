@@ -12,3 +12,6 @@ pnpm-lock.yaml
 .env
 .env.local
 .env.*.local
+# 忽略编译生成的 JavaScript 文件
+src/**/*.js
+!src/**/*.config.js
