@@ -134,14 +134,10 @@ class EnvEditor {
         ]);
         this.tray.setContextMenu(contextMenu);
         this.tray.setToolTip('Mac 环境变量编辑器');
-        // 点击托盘图标显示/隐藏窗口
+        // 点击托盘图标显示窗口
         this.tray.on('click', () => {
-            if (this.mainWindow?.isVisible()) {
-                this.hideWindow();
-            }
-            else {
-                this.showWindow();
-            }
+            console.log(`Tray click - Window exists: ${!!this.mainWindow}, isDestroyed: ${this.mainWindow?.isDestroyed()}, isVisible: ${this.mainWindow?.isVisible()}`);
+            this.showWindow();
         });
     }
     showWindow() {
