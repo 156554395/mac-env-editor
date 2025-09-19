@@ -5,7 +5,9 @@ import * as fs from 'fs';
 class EnvEditor {
     constructor() {
         this.mainWindow = null;
+        this.ipcSetup = false; // 标记IPC是否已经设置
         this.init();
+        this.setupIPC(); // 在构造函数中设置IPC，只执行一次
     }
     init() {
         app.whenReady().then(() => {
@@ -49,9 +51,13 @@ class EnvEditor {
                 this.mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
             }
         }
-        this.setupIPC();
     }
     setupIPC() {
+        // 避免重复注册IPC处理器
+        if (this.ipcSetup) {
+            return;
+        }
+        this.ipcSetup = true;
         ipcMain.handle('get-env-vars', this.handleGetEnvVars.bind(this));
         ipcMain.handle('save-env-vars', this.handleSaveEnvVars.bind(this));
         ipcMain.handle('backup-config', this.handleBackupConfig.bind(this));

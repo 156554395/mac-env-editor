@@ -5,9 +5,11 @@ import * as fs from 'fs'
 
 class EnvEditor {
   private mainWindow: BrowserWindow | null = null
+  private ipcSetup = false // 标记IPC是否已经设置
 
   constructor() {
     this.init()
+    this.setupIPC() // 在构造函数中设置IPC，只执行一次
   }
 
   private init() {
@@ -54,11 +56,15 @@ class EnvEditor {
         this.mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
       }
     }
-
-    this.setupIPC()
   }
 
   private setupIPC() {
+    // 避免重复注册IPC处理器
+    if (this.ipcSetup) {
+      return
+    }
+
+    this.ipcSetup = true
     ipcMain.handle('get-env-vars', this.handleGetEnvVars.bind(this))
     ipcMain.handle('save-env-vars', this.handleSaveEnvVars.bind(this))
     ipcMain.handle('backup-config', this.handleBackupConfig.bind(this))
