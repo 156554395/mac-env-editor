@@ -20,6 +20,13 @@ pnpm run build:main   # 仅构建主进程 TypeScript
 pnpm run build:renderer # 仅构建渲染进程
 ```
 
+**图标文件说明**：
+
+- **开发环境**：使用 `src/assets/icon.png` (PNG格式，Electron开发模式兼容性更好)
+- **生产环境**：使用 `build/Icon.icns` (ICNS格式，macOS原生高质量图标)
+- **托盘图标**：自动调整为18x18像素模板图像，适配系统主题
+- **应用图标**：在 Dock、Applications 文件夹、窗口标题栏中显示
+
 ### 依赖管理
 
 ```bash
@@ -42,6 +49,8 @@ pnpm install         # 安装所有依赖
   - Shell 信息检测和管理
   - IPC 消息处理
   - **源码编辑**: 完整配置文件内容的读取和保存
+  - **图标管理**: 智能图标加载系统，支持开发/生产环境不同格式
+  - **托盘管理**: 系统托盘图标和菜单功能
 
 #### 渲染进程 (Vue 3)
 
@@ -132,6 +141,16 @@ pnpm install         # 安装所有依赖
 2. 渲染进程构建 (`vite build`)
 3. 主进程 TypeScript 编译
 4. Electron 应用打包 (`electron-builder`)
+   - 自动包含 `build/Icon.icns` 图标文件
+   - 配置 Info.plist 中的 CFBundleIconFile
+   - 生成 DMG 安装包
+
+#### 图标配置说明
+
+- **应用图标路径优先级**:
+  1. 开发环境: `src/assets/icon.png` (PNG格式，兼容性好)
+  2. 生产环境: `build/Icon.icns` (ICNS格式，macOS原生)
+- **多环境图标支持**: 主进程智能检测环境并选择合适的图标格式
 
 ### 开发注意事项
 
@@ -153,6 +172,17 @@ pnpm install         # 安装所有依赖
 - 使用 preload 脚本暴露安全的 IPC 接口
 - 渲染进程通过 `window.electronAPI` 访问主进程功能
 
+#### UI 图标系统
+
+- **统一图标库**: 使用 Element Plus Icons 替代自绘图标
+- **图标组件**: 应用内所有图标统一使用 `<el-icon>` 组件
+- **避免 Emoji**: 不使用 emoji 作为功能图标，保证跨平台一致性
+- **图标类型**:
+  - 应用 Logo: `Setting` 图标
+  - 分类图标: `Grid`, `Setting`, `Link`, `Guide`, `Document`
+  - 操作图标: `Plus`, `Edit`, `Delete`, `Refresh`, `Check` 等
+
 #### 其它说明
 
 - src/下的js文件动态生成，修改时不用去修改，只修改src/下的ts文件即可
+- 图标系统采用统一的 Element Plus 设计语言，确保视觉一致性
