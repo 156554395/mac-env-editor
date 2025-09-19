@@ -1,7 +1,7 @@
 /// <reference types="../../../node_modules/.vue-global-types/vue_3.5_0_0_0.d.ts" />
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { ArrowDown, ChatDotRound, InfoFilled, Document, Plus, Edit, Delete } from '@element-plus/icons-vue';
+import { ArrowDown, ChatDotRound, InfoFilled, Document, Plus, Edit, Delete, CopyDocument } from '@element-plus/icons-vue';
 // 状态管理
 const envVars = ref([]);
 const originalEnvVars = ref([]);
@@ -12,6 +12,33 @@ const viewType = ref('all');
 const selectedCategory = ref('all');
 const operationLogs = ref([]);
 const showLogsDialog = ref(false);
+// 从本地存储加载操作日志
+const loadOperationLogs = () => {
+    try {
+        const savedLogs = localStorage.getItem('env-editor-operation-logs');
+        if (savedLogs) {
+            const parsed = JSON.parse(savedLogs);
+            // 将时间戳字符串转换回 Date 对象
+            operationLogs.value = parsed.map((log) => ({
+                ...log,
+                timestamp: new Date(log.timestamp)
+            }));
+        }
+    }
+    catch (error) {
+        console.error('加载操作日志失败:', error);
+        operationLogs.value = [];
+    }
+};
+// 保存操作日志到本地存储
+const saveOperationLogs = () => {
+    try {
+        localStorage.setItem('env-editor-operation-logs', JSON.stringify(operationLogs.value));
+    }
+    catch (error) {
+        console.error('保存操作日志失败:', error);
+    }
+};
 // 分类定义
 const categories = ref([
     { name: 'all', color: '#409eff', prefix: '' },
@@ -157,14 +184,16 @@ const filteredEnvVars = computed(() => {
     return filtered;
 });
 // 操作日志记录函数
-const addOperationLog = (type, category, key, description, oldValue, newValue) => {
+const addOperationLog = (type, category, key, description, oldValue, newValue, fullOldValue, fullNewValue) => {
     const log = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 11),
         type,
         category,
         key,
         oldValue,
         newValue,
+        fullOldValue,
+        fullNewValue,
         timestamp: new Date(),
         description
     };
@@ -173,6 +202,8 @@ const addOperationLog = (type, category, key, description, oldValue, newValue) =
     if (operationLogs.value.length > 100) {
         operationLogs.value = operationLogs.value.slice(0, 100);
     }
+    // 保存到本地存储
+    saveOperationLogs();
 };
 // 方法定义
 const loadData = async () => {
@@ -227,20 +258,12 @@ const handleRefresh = () => {
     loadData();
 };
 const handleValueChange = (row) => {
-    // 获取原始值用于日志记录
-    const originalRow = originalEnvVars.value.find(v => v.key === row.key && v.type === row.type);
-    row.isValid = validateEnvironmentVariable(row.key);
+    // 验证变量名有效性（别名和环境变量都用相同的规则）
+    row.isValid = isVarNameValid(row.key);
     checkChanges();
-    // 如果值真的发生了变化，记录日志
-    if (originalRow && originalRow.value !== row.value) {
-        const category = row.type === 'alias' ? '别名' : '环境变量';
-        addOperationLog('update', category, row.key, `修改了${category} "${row.key}" 的值`, originalRow.value, row.value);
-    }
     scheduleAutoSave();
 };
 const handleKeyChange = (row) => {
-    // 获取原始值用于日志记录
-    const originalRow = originalEnvVars.value.find(v => v.key === row.key && v.type === row.type);
     // 验证变量名
     row.isValid = isVarNameValid(row.key);
     // 更新分类
@@ -249,11 +272,6 @@ const handleKeyChange = (row) => {
     }
     else {
         row.category = '别名';
-    }
-    // 如果键名真的发生了变化，记录日志
-    if (originalRow && originalRow.key !== row.key) {
-        const category = row.type === 'alias' ? '别名' : '环境变量';
-        addOperationLog('update', category, originalRow.key, `修改了${category} "${originalRow.key}" 的名称为 "${row.key}"`, originalRow.key, row.key);
     }
     checkChanges();
     scheduleAutoSave();
@@ -339,6 +357,8 @@ const saveChangesToFile = async () => {
         });
         const result = await window.electronAPI.saveEnvVars(envData);
         if (result.success) {
+            // 在更新原始数据之前记录变化日志
+            recordChangeLogs();
             originalEnvVars.value = JSON.parse(JSON.stringify(envVars.value));
             hasChanges.value = false;
             return true;
@@ -352,6 +372,33 @@ const saveChangesToFile = async () => {
         ElMessage.error(`保存失败: ${err?.message || String(err)}`);
         return false;
     }
+};
+// 记录变化日志
+const recordChangeLogs = () => {
+    // 检测修改和新增
+    envVars.value.forEach(current => {
+        const original = originalEnvVars.value.find(o => o.key === current.key && o.type === current.type);
+        if (original) {
+            // 检测值变化
+            if (original.value !== current.value) {
+                const category = current.type === 'alias' ? '别名' : '环境变量';
+                addOperationLog('update', category, current.key, `修改了${category} "${current.key}" 的值`, original.value, current.value);
+            }
+        }
+        else {
+            // 检测新增（这种情况应该很少，因为新增通常通过 handleAddConfirm）
+            const category = current.type === 'alias' ? '别名' : '环境变量';
+            addOperationLog('create', category, current.key, `添加了${category} "${current.key}"`, undefined, current.value);
+        }
+    });
+    // 检测删除（在原始数组中但当前数组中找不到的项）
+    originalEnvVars.value.forEach(original => {
+        const current = envVars.value.find(c => c.key === original.key && c.type === original.type);
+        if (!current) {
+            const category = original.type === 'alias' ? '别名' : '环境变量';
+            addOperationLog('delete', category, original.key, `删除了${category} "${original.key}"`, original.value, undefined);
+        }
+    });
 };
 const handleDelete = async (index) => {
     const item = filteredEnvVars.value[index];
@@ -368,8 +415,6 @@ const handleDelete = async (index) => {
             // 自动保存到文件
             const success = await saveChangesToFile();
             if (success) {
-                // 记录操作日志
-                addOperationLog('delete', itemType, item.key, `删除了${itemType} "${item.key}"`, item.value, undefined);
                 ElMessage.success(`${itemType}已删除并保存`);
             }
         }
@@ -389,6 +434,14 @@ const handleSave = async () => {
                     filePath: sourceFilePath.value
                 });
                 if (result.success) {
+                    // 记录源码编辑操作日志（在更新原始内容之前）
+                    addOperationLog('update', '环境变量', sourceFileName.value || '配置文件', `修改了配置文件 "${sourceFileName.value || '配置文件'}" 的源码内容`, originalSourceContent.value.length > 300 ?
+                        originalSourceContent.value.substring(0, 300) + '...' :
+                        originalSourceContent.value, sourceContent.value.length > 300 ?
+                        sourceContent.value.substring(0, 300) + '...' :
+                        sourceContent.value, originalSourceContent.value, // 完整的原值
+                    sourceContent.value // 完整的新值
+                    );
                     originalSourceContent.value = sourceContent.value;
                     ElMessage.success(result.message || '配置文件已保存');
                     // 重新加载环境变量数据
@@ -559,17 +612,31 @@ const handleDropdownCommand = (command) => {
             break;
     }
 };
+// 复制文本到剪贴板
+const copyToClipboard = async (text) => {
+    try {
+        await navigator.clipboard.writeText(text);
+        ElMessage.success('已复制到剪贴板');
+    }
+    catch (err) {
+        console.error('复制失败:', err);
+        ElMessage.error('复制失败');
+    }
+};
 // 格式化时间
 const formatTime = (timestamp) => {
     const now = new Date();
     const diff = now.getTime() - timestamp.getTime();
-    if (diff < 60000) { // 1分钟内
+    if (diff < 60000) {
+        // 1分钟内
         return '刚刚';
     }
-    else if (diff < 3600000) { // 1小时内
+    else if (diff < 3600000) {
+        // 1小时内
         return `${Math.floor(diff / 60000)}分钟前`;
     }
-    else if (diff < 86400000) { // 24小时内
+    else if (diff < 86400000) {
+        // 24小时内
         return `${Math.floor(diff / 3600000)}小时前`;
     }
     else {
@@ -586,10 +653,14 @@ const formatTime = (timestamp) => {
 const clearLogs = () => {
     ElMessageBox.confirm('确定要清空所有操作日志吗？', '确认清空', {
         type: 'warning'
-    }).then(() => {
+    })
+        .then(() => {
         operationLogs.value = [];
+        // 清空本地存储
+        localStorage.removeItem('env-editor-operation-logs');
         ElMessage.success('操作日志已清空');
-    }).catch(() => { });
+    })
+        .catch(() => { });
 };
 // 打开GitHub Issues页面
 const openGitHubIssue = async () => {
@@ -598,7 +669,7 @@ const openGitHubIssue = async () => {
     // 获取系统信息用于问题模板
     const systemInfo = {
         userAgent: navigator.userAgent,
-        platform: navigator.platform,
+        platform: navigator.userAgent.includes('Mac') ? 'macOS' : 'Unknown',
         appVersion: '1.1.0'
     };
     const issueTemplate = `
@@ -687,6 +758,7 @@ const showAboutDialog = () => {
 // 生命周期
 onMounted(() => {
     loadData();
+    loadOperationLogs();
 });
 onBeforeUnmount(() => {
     if (autoSaveTimer) {
@@ -1919,10 +1991,47 @@ else {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                     ...{ class: "label" },
                 });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                    ...{ class: "value-container" },
+                });
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                     ...{ class: "value" },
                 });
                 (log.oldValue);
+                const __VLS_306 = {}.ElButton;
+                /** @type {[typeof __VLS_components.ElButton, typeof __VLS_components.elButton, ]} */ ;
+                // @ts-ignore
+                const __VLS_307 = __VLS_asFunctionalComponent(__VLS_306, new __VLS_306({
+                    ...{ 'onClick': {} },
+                    type: "text",
+                    size: "small",
+                    ...{ class: "copy-btn" },
+                    icon: (__VLS_ctx.CopyDocument),
+                    title: "复制原值",
+                }));
+                const __VLS_308 = __VLS_307({
+                    ...{ 'onClick': {} },
+                    type: "text",
+                    size: "small",
+                    ...{ class: "copy-btn" },
+                    icon: (__VLS_ctx.CopyDocument),
+                    title: "复制原值",
+                }, ...__VLS_functionalComponentArgsRest(__VLS_307));
+                let __VLS_310;
+                let __VLS_311;
+                let __VLS_312;
+                const __VLS_313 = {
+                    onClick: (...[$event]) => {
+                        if (!!(__VLS_ctx.operationLogs.length === 0))
+                            return;
+                        if (!(log.oldValue || log.newValue))
+                            return;
+                        if (!(log.oldValue))
+                            return;
+                        __VLS_ctx.copyToClipboard(log.fullOldValue || log.oldValue);
+                    }
+                };
+                var __VLS_309;
             }
             if (log.newValue) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1931,10 +2040,47 @@ else {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                     ...{ class: "label" },
                 });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                    ...{ class: "value-container" },
+                });
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                     ...{ class: "value" },
                 });
                 (log.newValue);
+                const __VLS_314 = {}.ElButton;
+                /** @type {[typeof __VLS_components.ElButton, typeof __VLS_components.elButton, ]} */ ;
+                // @ts-ignore
+                const __VLS_315 = __VLS_asFunctionalComponent(__VLS_314, new __VLS_314({
+                    ...{ 'onClick': {} },
+                    type: "text",
+                    size: "small",
+                    ...{ class: "copy-btn" },
+                    icon: (__VLS_ctx.CopyDocument),
+                    title: "复制新值",
+                }));
+                const __VLS_316 = __VLS_315({
+                    ...{ 'onClick': {} },
+                    type: "text",
+                    size: "small",
+                    ...{ class: "copy-btn" },
+                    icon: (__VLS_ctx.CopyDocument),
+                    title: "复制新值",
+                }, ...__VLS_functionalComponentArgsRest(__VLS_315));
+                let __VLS_318;
+                let __VLS_319;
+                let __VLS_320;
+                const __VLS_321 = {
+                    onClick: (...[$event]) => {
+                        if (!!(__VLS_ctx.operationLogs.length === 0))
+                            return;
+                        if (!(log.oldValue || log.newValue))
+                            return;
+                        if (!(log.newValue))
+                            return;
+                        __VLS_ctx.copyToClipboard(log.fullNewValue || log.newValue);
+                    }
+                };
+                var __VLS_317;
             }
         }
     }
@@ -1944,46 +2090,46 @@ else {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "dialog-footer" },
     });
-    const __VLS_306 = {}.ElButton;
+    const __VLS_322 = {}.ElButton;
     /** @type {[typeof __VLS_components.ElButton, typeof __VLS_components.elButton, typeof __VLS_components.ElButton, typeof __VLS_components.elButton, ]} */ ;
     // @ts-ignore
-    const __VLS_307 = __VLS_asFunctionalComponent(__VLS_306, new __VLS_306({
+    const __VLS_323 = __VLS_asFunctionalComponent(__VLS_322, new __VLS_322({
         ...{ 'onClick': {} },
         type: "danger",
         plain: true,
     }));
-    const __VLS_308 = __VLS_307({
+    const __VLS_324 = __VLS_323({
         ...{ 'onClick': {} },
         type: "danger",
         plain: true,
-    }, ...__VLS_functionalComponentArgsRest(__VLS_307));
-    let __VLS_310;
-    let __VLS_311;
-    let __VLS_312;
-    const __VLS_313 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_323));
+    let __VLS_326;
+    let __VLS_327;
+    let __VLS_328;
+    const __VLS_329 = {
         onClick: (__VLS_ctx.clearLogs)
     };
-    __VLS_309.slots.default;
-    var __VLS_309;
-    const __VLS_314 = {}.ElButton;
+    __VLS_325.slots.default;
+    var __VLS_325;
+    const __VLS_330 = {}.ElButton;
     /** @type {[typeof __VLS_components.ElButton, typeof __VLS_components.elButton, typeof __VLS_components.ElButton, typeof __VLS_components.elButton, ]} */ ;
     // @ts-ignore
-    const __VLS_315 = __VLS_asFunctionalComponent(__VLS_314, new __VLS_314({
+    const __VLS_331 = __VLS_asFunctionalComponent(__VLS_330, new __VLS_330({
         ...{ 'onClick': {} },
     }));
-    const __VLS_316 = __VLS_315({
+    const __VLS_332 = __VLS_331({
         ...{ 'onClick': {} },
-    }, ...__VLS_functionalComponentArgsRest(__VLS_315));
-    let __VLS_318;
-    let __VLS_319;
-    let __VLS_320;
-    const __VLS_321 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_331));
+    let __VLS_334;
+    let __VLS_335;
+    let __VLS_336;
+    const __VLS_337 = {
         onClick: (...[$event]) => {
             __VLS_ctx.showLogsDialog = false;
         }
     };
-    __VLS_317.slots.default;
-    var __VLS_317;
+    __VLS_333.slots.default;
+    var __VLS_333;
 }
 var __VLS_277;
 /** @type {__VLS_StyleScopedClasses['app-container']} */ ;
@@ -2068,10 +2214,14 @@ var __VLS_277;
 /** @type {__VLS_StyleScopedClasses['log-values']} */ ;
 /** @type {__VLS_StyleScopedClasses['log-old-value']} */ ;
 /** @type {__VLS_StyleScopedClasses['label']} */ ;
+/** @type {__VLS_StyleScopedClasses['value-container']} */ ;
 /** @type {__VLS_StyleScopedClasses['value']} */ ;
+/** @type {__VLS_StyleScopedClasses['copy-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['log-new-value']} */ ;
 /** @type {__VLS_StyleScopedClasses['label']} */ ;
+/** @type {__VLS_StyleScopedClasses['value-container']} */ ;
 /** @type {__VLS_StyleScopedClasses['value']} */ ;
+/** @type {__VLS_StyleScopedClasses['copy-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['dialog-footer']} */ ;
 // @ts-ignore
 var __VLS_225 = __VLS_224;
@@ -2086,6 +2236,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             Plus: Plus,
             Edit: Edit,
             Delete: Delete,
+            CopyDocument: CopyDocument,
             envVars: envVars,
             shellInfo: shellInfo,
             loading: loading,
@@ -2132,6 +2283,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             handleSourceContentChange: handleSourceContentChange,
             handleViewTypeChange: handleViewTypeChange,
             handleDropdownCommand: handleDropdownCommand,
+            copyToClipboard: copyToClipboard,
             formatTime: formatTime,
             clearLogs: clearLogs,
         };

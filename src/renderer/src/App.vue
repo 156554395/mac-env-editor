@@ -1027,16 +1027,6 @@ const handleDelete = async (index: number) => {
         // 自动保存到文件
         const success = await saveChangesToFile()
         if (success) {
-          // 记录操作日志
-          addOperationLog(
-            'delete',
-            itemType,
-            item.key,
-            `删除了${itemType} "${item.key}"`,
-            item.value,
-            undefined
-          )
-
           ElMessage.success(`${itemType}已删除并保存`)
         }
       }

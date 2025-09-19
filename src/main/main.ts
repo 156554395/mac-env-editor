@@ -32,8 +32,11 @@ class EnvEditor {
 
   private createWindow() {
     this.mainWindow = new BrowserWindow({
-      width: 800,
-      height: 600,
+      width: 1200,
+      height: 800,
+      minWidth: 1000,
+      minHeight: 700,
+      center: true,
       title: 'Mac 环境变量编辑器',
       webPreferences: {
         nodeIntegration: false,
