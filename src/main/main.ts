@@ -49,29 +49,45 @@ class EnvEditor {
     // 使用提供的图标文件
     let trayIcon: any
 
-    // 尝试不同的图标路径，开发环境和生产环境
-    const iconPaths = [
-      // 开发环境路径 - 优先使用PNG格式
-      path.join(process.cwd(), 'src/assets/icon.png'),
-      path.join(__dirname, '../src/assets/icon.png'),
-      path.join(__dirname, '../../src/assets/icon.png'),
-      // 开发环境 - ICNS格式
-      path.join(process.cwd(), 'build/Icon.icns'),
-      path.join(__dirname, '../build/Icon.icns'),
-      path.join(__dirname, '../../build/Icon.icns'),
-      // 生产环境路径
-      path.join(process.resourcesPath, 'build/Icon.icns'),
-      path.join(app.getAppPath(), 'build/Icon.icns')
-    ]
+    console.log('托盘图标路径查找:')
 
-    console.log('开发环境图标路径查找:')
+    // 根据环境确定路径查找策略
+    const isPackaged = app.isPackaged
+    console.log(`应用是否已打包: ${isPackaged}`)
+
+    let iconPaths: string[] = []
+
+    if (isPackaged) {
+      // 生产环境：electron-builder 自动复制图标到 Resources 目录
+      iconPaths = [
+        // 优先使用 PNG 格式图标（更好的兼容性）
+        path.join(process.resourcesPath, 'icon.png'),
+        // 备用 ICNS 格式图标
+        path.join(process.resourcesPath, 'icon.icns')
+      ]
+    } else {
+      // 开发环境
+      iconPaths = [
+        path.join(process.cwd(), 'src/assets/icon.png'),
+        path.join(__dirname, '../src/assets/icon.png'),
+        path.join(__dirname, '../../src/assets/icon.png'),
+        path.join(process.cwd(), 'build/Icon.icns'),
+        path.join(__dirname, '../build/Icon.icns'),
+        path.join(__dirname, '../../build/Icon.icns')
+      ]
+    }
+
+    // 无论开发还是生产环境，都记录所有尝试的路径
+    console.log(`准备尝试 ${iconPaths.length} 个图标路径`)
+    console.log(`图标路径列表: ${JSON.stringify(iconPaths, null, 2)}`)
     for (const iconPath of iconPaths) {
       console.log(`尝试路径: ${iconPath}`)
       try {
         if (fs.existsSync(iconPath)) {
           console.log(`✓ 找到图标文件: ${iconPath}`)
           trayIcon = nativeImage.createFromPath(iconPath)
-          console.log(`图标对象创建状态: isEmpty=${trayIcon.isEmpty()}, size=${trayIcon.getSize()}`)
+          console.log(`图标对象创建状态: isEmpty=${trayIcon.isEmpty()}, size=${JSON.stringify(trayIcon.getSize())}`)
+
           if (!trayIcon.isEmpty()) {
             // 调整图标大小并设置为模板图像
             trayIcon = trayIcon.resize({ width: 18, height: 18 })

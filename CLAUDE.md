@@ -149,8 +149,9 @@ pnpm install         # 安装所有依赖
 
 - **应用图标路径优先级**:
   1. 开发环境: `src/assets/icon.png` (PNG格式，兼容性好)
-  2. 生产环境: `build/Icon.icns` (ICNS格式，macOS原生)
+  2. 生产环境: `Resources/icon.icns` (electron-builder自动复制，ICNS格式)
 - **多环境图标支持**: 主进程智能检测环境并选择合适的图标格式
+- **托盘图标修复**: 生产环境下使用 `process.resourcesPath` 获取 Resources 目录中的图标文件，确保托盘图标正确显示
 
 ### 开发注意事项
 

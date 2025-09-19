@@ -8,7 +8,19 @@
     "dist/main.js",
     "dist/preload.js",
     "dist/renderer/**/*",
+    "build/Icon.icns",
+    "src/assets/icon.png",
     "node_modules/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "build/Icon.icns",
+      "to": "Icon.icns"
+    },
+    {
+      "from": "src/assets/icon.png",
+      "to": "icon.png"
+    }
   ],
   "mac": {
     "target": "dmg",
