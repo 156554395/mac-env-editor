@@ -16,7 +16,10 @@ export class ConfigParser {
           envVars.push({
             key: match[1].trim(),
             value: this.unquoteValue(match[2].trim()),
-            isValid: this.validateEnvironmentVariable(match[1].trim(), match[2].trim())
+            isValid: this.validateEnvironmentVariable(
+              match[1].trim(),
+              match[2].trim()
+            )
           })
         }
       }
@@ -32,10 +35,15 @@ export class ConfigParser {
       .join('\n')
   }
 
-  static updateFileContent(originalContent: string, envVars: EnvironmentVariable[]): string {
+  static updateFileContent(
+    originalContent: string,
+    envVars: EnvironmentVariable[]
+  ): string {
     const lines = originalContent.split('\n')
     const processedKeys = new Set<string>()
-    const validEnvVars = envVars.filter(env => env.isValid && env.key && env.value !== undefined)
+    const validEnvVars = envVars.filter(
+      env => env.isValid && env.key && env.value !== undefined
+    )
 
     const result = lines.map(line => {
       const trimmed = line.trim()
@@ -70,7 +78,10 @@ export class ConfigParser {
     return value.replace(/"/g, '\\"')
   }
 
-  private static validateEnvironmentVariable(key: string, value: string): boolean {
+  private static validateEnvironmentVariable(
+    key: string,
+    value: string
+  ): boolean {
     if (!key || typeof key !== 'string') {
       return false
     }

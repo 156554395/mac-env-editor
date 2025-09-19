@@ -61,8 +61,14 @@ class EnvEditor {
     ipcMain.handle('save-env-vars', this.handleSaveEnvVars.bind(this))
     ipcMain.handle('backup-config', this.handleBackupConfig.bind(this))
     ipcMain.handle('get-shell-info', this.handleGetShellInfo.bind(this))
-    ipcMain.handle('get-config-file-content', this.handleGetConfigFileContent.bind(this))
-    ipcMain.handle('save-config-file-content', this.handleSaveConfigFileContent.bind(this))
+    ipcMain.handle(
+      'get-config-file-content',
+      this.handleGetConfigFileContent.bind(this)
+    )
+    ipcMain.handle(
+      'save-config-file-content',
+      this.handleSaveConfigFileContent.bind(this)
+    )
   }
 
   private async handleGetEnvVars() {
@@ -97,7 +103,10 @@ class EnvEditor {
     }
   }
 
-  private async handleSaveEnvVars(event: any, data: { env: { [key: string]: string }, aliases: { [key: string]: string } }) {
+  private async handleSaveEnvVars(
+    event: any,
+    data: { env: { [key: string]: string }; aliases: { [key: string]: string } }
+  ) {
     try {
       const homedir = os.homedir()
       const configFile = this.getPrimaryConfigFile()
@@ -111,7 +120,10 @@ class EnvEditor {
         content = this.updateEnvVars(content, data.env || {})
         content = this.updateAliases(content, data.aliases || {})
       } else {
-        content = this.generateEnvVarsContent(data.env || {}) + '\n' + this.generateAliasesContent(data.aliases || {})
+        content =
+          this.generateEnvVarsContent(data.env || {}) +
+          '\n' +
+          this.generateAliasesContent(data.aliases || {})
       }
 
       await fs.promises.writeFile(configFile, content, 'utf-8')
@@ -186,7 +198,10 @@ class EnvEditor {
     }
   }
 
-  private async handleSaveConfigFileContent(event: any, data: { content: string, filePath?: string }) {
+  private async handleSaveConfigFileContent(
+    event: any,
+    data: { content: string; filePath?: string }
+  ) {
     try {
       const targetPath = data.filePath || this.getPrimaryConfigFile()
 
@@ -231,29 +246,34 @@ class EnvEditor {
     }
   }
 
-  private updateEnvVars(content: string, envVars: { [key: string]: string }): string {
+  private updateEnvVars(
+    content: string,
+    envVars: { [key: string]: string }
+  ): string {
     const lines = content.split('\n')
     const processedKeys = new Set<string>()
 
     // 第一步：更新或删除现有的 export 行
-    const result = lines.map(line => {
-      const trimmed = line.trim()
-      if (trimmed && !trimmed.startsWith('#')) {
-        const match = trimmed.match(/^export\s+([^=]+)=(.*)$/)
-        if (match) {
-          const key = match[1].trim()
-          if (envVars.hasOwnProperty(key)) {
-            // 更新现有变量
-            processedKeys.add(key)
-            return `export ${key}="${envVars[key]}"`
-          } else {
-            // 删除不在新数据中的变量（返回空字符串）
-            return ''
+    const result = lines
+      .map(line => {
+        const trimmed = line.trim()
+        if (trimmed && !trimmed.startsWith('#')) {
+          const match = trimmed.match(/^export\s+([^=]+)=(.*)$/)
+          if (match) {
+            const key = match[1].trim()
+            if (envVars.hasOwnProperty(key)) {
+              // 更新现有变量
+              processedKeys.add(key)
+              return `export ${key}="${envVars[key]}"`
+            } else {
+              // 删除不在新数据中的变量（返回空字符串）
+              return ''
+            }
           }
         }
-      }
-      return line
-    }).filter(line => line !== '') // 过滤掉空行（被删除的变量）
+        return line
+      })
+      .filter(line => line !== '') // 过滤掉空行（被删除的变量）
 
     // 第二步：添加新变量
     for (const [key, value] of Object.entries(envVars)) {
@@ -288,29 +308,34 @@ class EnvEditor {
     }
   }
 
-  private updateAliases(content: string, aliases: { [key: string]: string }): string {
+  private updateAliases(
+    content: string,
+    aliases: { [key: string]: string }
+  ): string {
     const lines = content.split('\n')
     const processedKeys = new Set<string>()
 
     // 第一步：更新或删除现有的 alias 行
-    const result = lines.map(line => {
-      const trimmed = line.trim()
-      if (trimmed && !trimmed.startsWith('#')) {
-        const match = trimmed.match(/^alias\s+([^=]+)=(.*)$/)
-        if (match) {
-          const key = match[1].trim()
-          if (aliases.hasOwnProperty(key)) {
-            // 更新现有别名
-            processedKeys.add(key)
-            return `alias ${key}="${aliases[key]}"`
-          } else {
-            // 删除不在新数据中的别名（返回空字符串）
-            return ''
+    const result = lines
+      .map(line => {
+        const trimmed = line.trim()
+        if (trimmed && !trimmed.startsWith('#')) {
+          const match = trimmed.match(/^alias\s+([^=]+)=(.*)$/)
+          if (match) {
+            const key = match[1].trim()
+            if (aliases.hasOwnProperty(key)) {
+              // 更新现有别名
+              processedKeys.add(key)
+              return `alias ${key}="${aliases[key]}"`
+            } else {
+              // 删除不在新数据中的别名（返回空字符串）
+              return ''
+            }
           }
         }
-      }
-      return line
-    }).filter(line => line !== '') // 过滤掉空行（被删除的别名）
+        return line
+      })
+      .filter(line => line !== '') // 过滤掉空行（被删除的别名）
 
     // 第二步：添加新别名
     for (const [key, value] of Object.entries(aliases)) {

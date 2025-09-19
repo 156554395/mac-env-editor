@@ -1,0 +1,14 @@
+node_modules
+dist
+build
+*.min.js
+*.min.css
+coverage
+.nyc_output
+.DS_Store
+*.log
+package-lock.json
+pnpm-lock.yaml
+.env
+.env.local
+.env.*.local

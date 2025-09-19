@@ -7,7 +7,7 @@
           <div class="logo-icon">⚙️</div>
           <h1 class="app-title">环境变量管理器</h1>
         </div>
-        <div class="shell-info-badge" v-if="shellInfo">
+        <div v-if="shellInfo" class="shell-info-badge">
           <span class="shell-name">{{ shellInfo.shellName }}</span>
           <span class="config-path">{{ shellInfo.activeConfig }}</span>
         </div>
@@ -17,8 +17,8 @@
         <el-button
           type="info"
           :icon="'Refresh'"
-          @click="handleRefresh"
           :loading="loading"
+          @click="handleRefresh"
         >
           刷新
         </el-button>
@@ -34,8 +34,8 @@
           type="primary"
           :icon="'Check'"
           :disabled="!hasChanges"
-          @click="handleSave"
           :loading="saving"
+          @click="handleSave"
         >
           保存更改
         </el-button>
@@ -49,11 +49,16 @@
         <!-- 视图切换器 -->
         <div class="view-switcher">
           <h3 class="panel-title">视图模式</h3>
-          <el-segmented v-model="viewType" :options="viewOptions" size="large" @change="handleViewTypeChange" />
+          <el-segmented
+            v-model="viewType"
+            :options="viewOptions"
+            size="large"
+            @change="handleViewTypeChange"
+          />
         </div>
 
         <!-- 分类过滤器 -->
-        <div class="category-filter" v-if="viewType === 'all'">
+        <div v-if="viewType === 'all'" class="category-filter">
           <h3 class="panel-title">分类筛选</h3>
           <div class="category-grid">
             <div
@@ -63,12 +68,17 @@
               :class="{ active: selectedCategory === category.name }"
               @click="selectCategory(category.name)"
             >
-              <div class="category-icon" :style="{ backgroundColor: category.color }">
+              <div
+                class="category-icon"
+                :style="{ backgroundColor: category.color }"
+              >
                 {{ getCategoryIcon(category.name) }}
               </div>
               <div class="category-info">
                 <span class="category-name">{{ category.name }}</span>
-                <span class="category-count">{{ getCategoryCount(category.name) }}</span>
+                <span class="category-count">{{
+                  getCategoryCount(category.name)
+                }}</span>
               </div>
             </div>
           </div>
@@ -79,15 +89,21 @@
           <h3 class="panel-title">统计信息</h3>
           <div class="stats-grid">
             <div class="stat-item">
-              <div class="stat-number">{{ envVars.filter(v => v.type === 'env').length }}</div>
+              <div class="stat-number">
+                {{ envVars.filter(v => v.type === 'env').length }}
+              </div>
               <div class="stat-label">环境变量</div>
             </div>
             <div class="stat-item">
-              <div class="stat-number">{{ envVars.filter(v => v.type === 'alias').length }}</div>
+              <div class="stat-number">
+                {{ envVars.filter(v => v.type === 'alias').length }}
+              </div>
               <div class="stat-label">别名</div>
             </div>
             <div class="stat-item">
-              <div class="stat-number">{{ envVars.filter(v => v.key.includes('PATH')).length }}</div>
+              <div class="stat-number">
+                {{ envVars.filter(v => v.key.includes('PATH')).length }}
+              </div>
               <div class="stat-label">PATH 相关</div>
             </div>
           </div>
@@ -101,7 +117,8 @@
           <div class="toolbar-left">
             <h2 class="workspace-title">{{ getCurrentTitle() }}</h2>
             <div class="result-count">
-              共 <span class="count-number">{{ filteredEnvVars.length }}</span> 项
+              共
+              <span class="count-number">{{ filteredEnvVars.length }}</span> 项
             </div>
           </div>
 
@@ -113,15 +130,19 @@
               clearable
               :prefix-icon="'Search'"
             />
-            <el-dropdown @command="handleAddCommand" trigger="click">
+            <el-dropdown trigger="click" @command="handleAddCommand">
               <el-button type="primary" size="large" :icon="'Plus'">
                 添加
                 <el-icon class="el-icon--right"><arrow-down /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="env" :icon="'Setting'">环境变量</el-dropdown-item>
-                  <el-dropdown-item command="alias" :icon="'Link'">别名</el-dropdown-item>
+                  <el-dropdown-item command="env" :icon="'Setting'"
+                    >环境变量</el-dropdown-item
+                  >
+                  <el-dropdown-item command="alias" :icon="'Link'"
+                    >别名</el-dropdown-item
+                  >
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -136,19 +157,20 @@
           </div>
 
           <div v-else-if="error" class="error-state">
-            <el-result
-              icon="error"
-              title="加载失败"
-              :sub-title="error"
-            >
+            <el-result icon="error" title="加载失败" :sub-title="error">
               <template #extra>
-                <el-button type="primary" @click="handleRefresh">重新加载</el-button>
+                <el-button type="primary" @click="handleRefresh"
+                  >重新加载</el-button
+                >
               </template>
             </el-result>
           </div>
 
           <!-- 源码编辑视图 -->
-          <div v-else-if="viewType === 'source'" class="source-editor-container">
+          <div
+            v-else-if="viewType === 'source'"
+            class="source-editor-container"
+          >
             <div v-if="sourceLoading" class="loading-state">
               <el-skeleton :rows="8" animated />
               <div class="loading-text">正在加载源码...</div>
@@ -165,10 +187,10 @@
                   <el-button
                     type="success"
                     :icon="'Check'"
-                    @click="saveSourceContent"
                     :loading="sourceSaving"
                     :disabled="!hasChanges"
                     size="large"
+                    @click="saveSourceContent"
                   >
                     保存文件
                   </el-button>
@@ -180,15 +202,21 @@
                   type="textarea"
                   :rows="20"
                   placeholder="请输入配置文件内容..."
-                  @input="handleSourceContentChange"
                   class="source-textarea"
+                  @input="handleSourceContentChange"
                 />
               </div>
               <div class="source-editor-footer">
                 <div class="footer-info">
-                  <span class="line-count">行数: {{ sourceContent.split('\n').length }}</span>
-                  <span class="char-count">字符: {{ sourceContent.length }}</span>
-                  <span v-if="hasChanges" class="change-indicator">• 未保存的更改</span>
+                  <span class="line-count"
+                    >行数: {{ sourceContent.split('\n').length }}</span
+                  >
+                  <span class="char-count"
+                    >字符: {{ sourceContent.length }}</span
+                  >
+                  <span v-if="hasChanges" class="change-indicator"
+                    >• 未保存的更改</span
+                  >
                 </div>
               </div>
             </div>
@@ -201,7 +229,9 @@
               :sub-title="getEmptyDescription()"
             >
               <template #extra>
-                <el-button type="primary" @click="showAddDialog()">添加第一个</el-button>
+                <el-button type="primary" @click="showAddDialog()"
+                  >添加第一个</el-button
+                >
               </template>
             </el-result>
           </div>
@@ -215,10 +245,10 @@
               size="large"
             >
               <el-table-column
+                v-if="viewType === 'all'"
                 prop="type"
                 label="类型"
                 width="120"
-                v-if="viewType === 'all'"
                 align="center"
               >
                 <template #default="{ row }">
@@ -227,7 +257,11 @@
                     size="large"
                     effect="dark"
                   >
-                    <i :class="row.type === 'env' ? 'el-icon-setting' : 'el-icon-link'"></i>
+                    <i
+                      :class="
+                        row.type === 'env' ? 'el-icon-setting' : 'el-icon-link'
+                      "
+                    ></i>
                     {{ row.type === 'env' ? 'ENV' : 'ALIAS' }}
                   </el-tag>
                 </template>
@@ -239,10 +273,10 @@
                     <el-input
                       v-model="row.key"
                       :class="{ 'invalid-input': !isVarNameValid(row.key) }"
-                      @input="handleKeyChange(row)"
                       placeholder="变量名称"
                       size="large"
                       class="key-input"
+                      @input="handleKeyChange(row)"
                     />
                   </div>
                 </template>
@@ -253,9 +287,9 @@
                   <el-input
                     v-model="row.value"
                     :class="{ 'invalid-input': !row.isValid }"
-                    @input="handleValueChange(row)"
                     :placeholder="getPlaceholder(row.type)"
                     size="large"
+                    @input="handleValueChange(row)"
                   />
                 </template>
               </el-table-column>
@@ -266,8 +300,8 @@
                     type="danger"
                     size="large"
                     :icon="'Delete'"
-                    @click="handleDelete($index)"
                     text
+                    @click="handleDelete($index)"
                   >
                     删除
                   </el-button>
@@ -287,8 +321,14 @@
       :show-close="false"
       class="add-dialog"
     >
-      <el-form :model="newVar" :rules="rules" ref="varForm" label-width="120px" size="large">
-        <el-form-item label="类型" prop="type" v-if="showTypeSelector">
+      <el-form
+        ref="varForm"
+        :model="newVar"
+        :rules="rules"
+        label-width="120px"
+        size="large"
+      >
+        <el-form-item v-if="showTypeSelector" label="类型" prop="type">
           <el-radio-group v-model="newVar.type" size="large">
             <el-radio-button value="env">环境变量</el-radio-button>
             <el-radio-button value="alias">别名</el-radio-button>
@@ -313,8 +353,12 @@
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="dialogVisible = false" size="large">取消</el-button>
-          <el-button type="primary" @click="handleAddConfirm" size="large">确定添加</el-button>
+          <el-button size="large" @click="dialogVisible = false"
+            >取消</el-button
+          >
+          <el-button type="primary" size="large" @click="handleAddConfirm"
+            >确定添加</el-button
+          >
         </div>
       </template>
     </el-dialog>
@@ -330,12 +374,36 @@ import { EnvironmentVariable, ShellInfo, EnvData } from '../../types'
 declare global {
   interface Window {
     electronAPI: {
-      getEnvVars: () => Promise<{ success: boolean; data?: EnvData; error?: string }>
-      saveEnvVars: (data: EnvData) => Promise<{ success: boolean; message?: string; error?: string }>
-      backupConfig: (configFile?: string) => Promise<{ success: boolean; backupPath?: string; error?: string }>
-      getShellInfo: () => Promise<{ success: boolean; data?: ShellInfo; error?: string }>
-      getConfigFileContent: (configFile?: string) => Promise<{ success: boolean; data?: { content: string; filePath: string; fileName: string }; error?: string }>
-      saveConfigFileContent: (data: { content: string; filePath?: string }) => Promise<{ success: boolean; message?: string; filePath?: string; error?: string }>
+      getEnvVars: () => Promise<{
+        success: boolean
+        data?: EnvData
+        error?: string
+      }>
+      saveEnvVars: (
+        data: EnvData
+      ) => Promise<{ success: boolean; message?: string; error?: string }>
+      backupConfig: (
+        configFile?: string
+      ) => Promise<{ success: boolean; backupPath?: string; error?: string }>
+      getShellInfo: () => Promise<{
+        success: boolean
+        data?: ShellInfo
+        error?: string
+      }>
+      getConfigFileContent: (configFile?: string) => Promise<{
+        success: boolean
+        data?: { content: string; filePath: string; fileName: string }
+        error?: string
+      }>
+      saveConfigFileContent: (data: {
+        content: string
+        filePath?: string
+      }) => Promise<{
+        success: boolean
+        message?: string
+        filePath?: string
+        error?: string
+      }>
     }
   }
 }
@@ -437,12 +505,8 @@ const newVar = reactive({
 })
 
 const rules = {
-  key: [
-    { required: true, message: '请输入变量名', trigger: 'blur' }
-  ],
-  value: [
-    { required: true, message: '请输入变量值', trigger: 'blur' }
-  ]
+  key: [{ required: true, message: '请输入变量名', trigger: 'blur' }],
+  value: [{ required: true, message: '请输入变量值', trigger: 'blur' }]
 }
 
 // 计算属性
@@ -505,9 +569,10 @@ const filteredEnvVars = computed(() => {
   // 根据搜索查询过滤
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
-    filtered = filtered.filter(env =>
-      env.key.toLowerCase().includes(query) ||
-      env.value.toLowerCase().includes(query)
+    filtered = filtered.filter(
+      env =>
+        env.key.toLowerCase().includes(query) ||
+        env.value.toLowerCase().includes(query)
     )
   }
 
@@ -614,11 +679,17 @@ const checkChanges = () => {
 const handleAddConfirm = async () => {
   varForm.value?.validate(async (valid: boolean) => {
     if (valid && isVarNameValid(newVar.key)) {
-      const category = newVar.type === 'alias' ? '别名' :
-                     newVar.key.includes('PATH') ? 'PATH' : '环境变量'
+      const category =
+        newVar.type === 'alias'
+          ? '别名'
+          : newVar.key.includes('PATH')
+            ? 'PATH'
+            : '环境变量'
 
       // 检查是否已存在
-      const existingIndex = envVars.value.findIndex(v => v.key === newVar.key && v.type === newVar.type)
+      const existingIndex = envVars.value.findIndex(
+        v => v.key === newVar.key && v.type === newVar.type
+      )
       if (existingIndex !== -1) {
         ElMessage.error('该名称已存在')
         return
@@ -684,26 +755,26 @@ const handleDelete = async (index: number) => {
   const item = filteredEnvVars.value[index]
   const itemType = item.type === 'alias' ? '别名' : '环境变量'
 
-  ElMessageBox.confirm(
-    `确定要删除${itemType} "${item.key}" 吗？`,
-    '确认删除',
-    {
-      type: 'warning'
-    }
-  ).then(async () => {
-    // 从原数组中找到并删除该项
-    const originalIndex = envVars.value.findIndex(v => v.key === item.key && v.type === item.type)
-    if (originalIndex !== -1) {
-      envVars.value.splice(originalIndex, 1)
-      checkChanges()
+  ElMessageBox.confirm(`确定要删除${itemType} "${item.key}" 吗？`, '确认删除', {
+    type: 'warning'
+  })
+    .then(async () => {
+      // 从原数组中找到并删除该项
+      const originalIndex = envVars.value.findIndex(
+        v => v.key === item.key && v.type === item.type
+      )
+      if (originalIndex !== -1) {
+        envVars.value.splice(originalIndex, 1)
+        checkChanges()
 
-      // 自动保存到文件
-      const success = await saveChangesToFile()
-      if (success) {
-        ElMessage.success(`${itemType}已删除并保存`)
+        // 自动保存到文件
+        const success = await saveChangesToFile()
+        if (success) {
+          ElMessage.success(`${itemType}已删除并保存`)
+        }
       }
-    }
-  }).catch(() => {})
+    })
+    .catch(() => {})
 }
 
 const handleSave = async () => {
@@ -778,11 +849,16 @@ const handleAdd = (type?: 'env' | 'alias') => {
 // 获取分类图标
 const getCategoryIcon = (categoryName: string) => {
   switch (categoryName) {
-    case 'all': return '📋'
-    case '环境变量': return '⚙️'
-    case '别名': return '🔗'
-    case 'PATH': return '🛤️'
-    default: return '📄'
+    case 'all':
+      return '📋'
+    case '环境变量':
+      return '⚙️'
+    case '别名':
+      return '🔗'
+    case 'PATH':
+      return '🛤️'
+    default:
+      return '📄'
   }
 }
 
@@ -915,7 +991,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
 }
 
 /* 顶部导航栏 */
@@ -1106,7 +1184,11 @@ onBeforeUnmount(() => {
 .stat-item {
   text-align: center;
   padding: 16px;
-  background: linear-gradient(135deg, rgba(103, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+  background: linear-gradient(
+    135deg,
+    rgba(103, 126, 234, 0.1),
+    rgba(118, 75, 162, 0.1)
+  );
   border-radius: 12px;
   border: 1px solid rgba(103, 126, 234, 0.2);
 }

@@ -51,13 +51,20 @@ export class EnvManager {
     }
   }
 
-  async saveEnvironmentVariables(envVars: EnvironmentVariable[]): Promise<{ success: boolean; message?: string; error?: string }> {
+  async saveEnvironmentVariables(
+    envVars: EnvironmentVariable[]
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
     try {
-      const validVars = envVars.filter(env => env.isValid && env.key && env.value !== undefined)
-      const envMap = validVars.reduce((acc, env) => {
-        acc[env.key] = env.value
-        return acc
-      }, {} as { [key: string]: string })
+      const validVars = envVars.filter(
+        env => env.isValid && env.key && env.value !== undefined
+      )
+      const envMap = validVars.reduce(
+        (acc, env) => {
+          acc[env.key] = env.value
+          return acc
+        },
+        {} as { [key: string]: string }
+      )
 
       const result = await window.electronAPI.saveEnvVars(envMap)
 
@@ -75,7 +82,9 @@ export class EnvManager {
     }
   }
 
-  async backupConfig(configFile?: string): Promise<{ success: boolean; backupPath?: string; error?: string }> {
+  async backupConfig(
+    configFile?: string
+  ): Promise<{ success: boolean; backupPath?: string; error?: string }> {
     try {
       const result = await window.electronAPI.backupConfig(configFile)
       return result
@@ -108,7 +117,11 @@ export class EnvManager {
     return null
   }
 
-  updateEnvironmentVariable(index: number, key?: string, value?: string): EnvironmentVariable | null {
+  updateEnvironmentVariable(
+    index: number,
+    key?: string,
+    value?: string
+  ): EnvironmentVariable | null {
     if (index >= 0 && index < this.envVars.length) {
       const envVar = this.envVars[index]
 
@@ -120,7 +133,10 @@ export class EnvManager {
         envVar.value = value
       }
 
-      envVar.isValid = this.validateEnvironmentVariable(envVar.key, envVar.value)
+      envVar.isValid = this.validateEnvironmentVariable(
+        envVar.key,
+        envVar.value
+      )
 
       return envVar
     }
@@ -137,9 +153,10 @@ export class EnvManager {
 
   searchEnvironmentVariables(query: string): EnvironmentVariable[] {
     const lowerQuery = query.toLowerCase()
-    return this.envVars.filter(env =>
-      env.key.toLowerCase().includes(lowerQuery) ||
-      env.value.toLowerCase().includes(lowerQuery)
+    return this.envVars.filter(
+      env =>
+        env.key.toLowerCase().includes(lowerQuery) ||
+        env.value.toLowerCase().includes(lowerQuery)
     )
   }
 
@@ -150,10 +167,12 @@ export class EnvManager {
 
     return this.envVars.some((env, index) => {
       const original = originalEnvVars[index]
-      return !original ||
-             env.key !== original.key ||
-             env.value !== original.value ||
-             env.isValid !== original.isValid
+      return (
+        !original ||
+        env.key !== original.key ||
+        env.value !== original.value ||
+        env.isValid !== original.isValid
+      )
     })
   }
 
@@ -178,10 +197,15 @@ export class EnvManager {
     return this.validateEnvironmentVariable(name, '')
   }
 
-  validateBeforeSave(envVars: EnvironmentVariable[]): { isValid: boolean; errors: string[] } {
+  validateBeforeSave(envVars: EnvironmentVariable[]): {
+    isValid: boolean
+    errors: string[]
+  } {
     const errors: string[] = []
 
-    const validVars = envVars.filter(env => env.isValid && env.key && env.value !== undefined)
+    const validVars = envVars.filter(
+      env => env.isValid && env.key && env.value !== undefined
+    )
     const keyMap = new Map<string, EnvironmentVariable[]>()
 
     for (const env of validVars) {
@@ -214,7 +238,9 @@ export class EnvManager {
     }
   }
 
-  getEnvironmentVariableByCategory(): { [category: string]: EnvironmentVariable[] } {
+  getEnvironmentVariableByCategory(): {
+    [category: string]: EnvironmentVariable[]
+  } {
     const categories = {
       system: [],
       path: [],
@@ -229,13 +255,28 @@ export class EnvManager {
 
       if (key.includes('PATH')) {
         categories.path.push(env)
-      } else if (key.includes('SHELL') || key.includes('HOME') || key.includes('USER') || key.includes('TERM')) {
+      } else if (
+        key.includes('SHELL') ||
+        key.includes('HOME') ||
+        key.includes('USER') ||
+        key.includes('TERM')
+      ) {
         categories.system.push(env)
       } else if (key.includes('LANG') || key.includes('LC_')) {
         categories.shell.push(env)
-      } else if (key.includes('NODE_') || key.includes('NPM_') || key.includes('PYTHON') || key.includes('JAVA_') || key.includes('GO')) {
+      } else if (
+        key.includes('NODE_') ||
+        key.includes('NPM_') ||
+        key.includes('PYTHON') ||
+        key.includes('JAVA_') ||
+        key.includes('GO')
+      ) {
         categories.development.push(env)
-      } else if (key.includes('HTTP_') || key.includes('DATABASE_') || key.includes('APP_')) {
+      } else if (
+        key.includes('HTTP_') ||
+        key.includes('DATABASE_') ||
+        key.includes('APP_')
+      ) {
         categories.application.push(env)
       } else {
         categories.custom.push(env)
@@ -253,11 +294,16 @@ export class EnvManager {
   }
 
   exportToJsonFormat(envVars: EnvironmentVariable[]): string {
-    const validVars = envVars.filter(env => env.isValid && env.key && env.value !== undefined)
-    const obj = validVars.reduce((acc, env) => {
-      acc[env.key] = env.value
-      return acc
-    }, {} as { [key: string]: string })
+    const validVars = envVars.filter(
+      env => env.isValid && env.key && env.value !== undefined
+    )
+    const obj = validVars.reduce(
+      (acc, env) => {
+        acc[env.key] = env.value
+        return acc
+      },
+      {} as { [key: string]: string }
+    )
 
     return JSON.stringify(obj, null, 2)
   }
@@ -268,13 +314,18 @@ export class EnvManager {
     invalid: number
     categories: { [category: string]: number }
   } {
-    const validVars = envVars.filter(env => env.isValid && env.key && env.value !== undefined)
+    const validVars = envVars.filter(
+      env => env.isValid && env.key && env.value !== undefined
+    )
     const categories = this.getEnvironmentVariableByCategory()
 
-    const categoryCounts = Object.keys(categories).reduce((acc, category) => {
-      acc[category] = categories[category as keyof typeof categories].length
-      return acc
-    }, {} as { [category: string]: number })
+    const categoryCounts = Object.keys(categories).reduce(
+      (acc, category) => {
+        acc[category] = categories[category as keyof typeof categories].length
+        return acc
+      },
+      {} as { [category: string]: number }
+    )
 
     return {
       total: envVars.length,

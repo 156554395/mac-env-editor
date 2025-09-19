@@ -34,4 +34,9 @@ export interface EnvData {
   aliases: { [key: string]: string }
 }
 
-export type ConfigFileType = '.zshrc' | '.bash_profile' | '.bashrc' | '.profile' | '/etc/paths'
+export type ConfigFileType =
+  | '.zshrc'
+  | '.bash_profile'
+  | '.bashrc'
+  | '.profile'
+  | '/etc/paths'

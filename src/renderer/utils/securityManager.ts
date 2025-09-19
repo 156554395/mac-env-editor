@@ -41,17 +41,27 @@ export class SecurityManager {
     }
   }
 
-  async createBackup(configPath: string, content: string): Promise<SecurityResult> {
+  async createBackup(
+    configPath: string,
+    content: string
+  ): Promise<SecurityResult> {
     try {
       await this.ensureBackupDir()
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const configName = path.basename(configPath)
-      const backupPath = path.join(this.backupDir, `${configName}.${timestamp}.backup`)
+      const backupPath = path.join(
+        this.backupDir,
+        `${configName}.${timestamp}.backup`
+      )
 
       await fsWriteFile(backupPath, content, 'utf-8')
 
-      await this.logOperation('backup', 'success', `创建备份: ${configPath} -> ${backupPath}`)
+      await this.logOperation(
+        'backup',
+        'success',
+        `创建备份: ${configPath} -> ${backupPath}`
+      )
 
       return {
         success: true,
@@ -60,7 +70,11 @@ export class SecurityManager {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知错误'
-      await this.logOperation('backup', 'failed', `备份失败: ${configPath} - ${errorMessage}`)
+      await this.logOperation(
+        'backup',
+        'failed',
+        `备份失败: ${configPath} - ${errorMessage}`
+      )
 
       return {
         success: false,
@@ -69,9 +83,12 @@ export class SecurityManager {
     }
   }
 
-  async restoreFromBackup(backupPath: string, configPath: string): Promise<SecurityResult> {
+  async restoreFromBackup(
+    backupPath: string,
+    configPath: string
+  ): Promise<SecurityResult> {
     try {
-      if (!await this.fileExists(backupPath)) {
+      if (!(await this.fileExists(backupPath))) {
         return {
           success: false,
           error: '备份文件不存在'
@@ -79,12 +96,19 @@ export class SecurityManager {
       }
 
       if (await this.fileExists(configPath)) {
-        await this.createBackup(configPath, await fsReadFile(configPath, 'utf-8'))
+        await this.createBackup(
+          configPath,
+          await fsReadFile(configPath, 'utf-8')
+        )
       }
 
       await fsCopyFile(backupPath, configPath)
 
-      await this.logOperation('restore', 'success', `从备份恢复: ${backupPath} -> ${configPath}`)
+      await this.logOperation(
+        'restore',
+        'success',
+        `从备份恢复: ${backupPath} -> ${configPath}`
+      )
 
       return {
         success: true,
@@ -92,7 +116,11 @@ export class SecurityManager {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知错误'
-      await this.logOperation('restore', 'failed', `恢复失败: ${backupPath} -> ${configPath} - ${errorMessage}`)
+      await this.logOperation(
+        'restore',
+        'failed',
+        `恢复失败: ${backupPath} -> ${configPath} - ${errorMessage}`
+      )
 
       return {
         success: false,
@@ -136,7 +164,7 @@ export class SecurityManager {
 
   async deleteBackup(backupPath: string): Promise<SecurityResult> {
     try {
-      if (!await this.fileExists(backupPath)) {
+      if (!(await this.fileExists(backupPath))) {
         return {
           success: false,
           error: '备份文件不存在'
@@ -145,7 +173,11 @@ export class SecurityManager {
 
       await fsUnlink(backupPath)
 
-      await this.logOperation('delete_backup', 'success', `删除备份: ${backupPath}`)
+      await this.logOperation(
+        'delete_backup',
+        'success',
+        `删除备份: ${backupPath}`
+      )
 
       return {
         success: true,
@@ -153,7 +185,11 @@ export class SecurityManager {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知错误'
-      await this.logOperation('delete_backup', 'failed', `删除备份失败: ${backupPath} - ${errorMessage}`)
+      await this.logOperation(
+        'delete_backup',
+        'failed',
+        `删除备份失败: ${backupPath} - ${errorMessage}`
+      )
 
       return {
         success: false,
@@ -184,7 +220,11 @@ export class SecurityManager {
         }
       }
 
-      await this.logOperation('cleanup', 'success', `清理旧备份: 删除了 ${deletedCount} 个文件`)
+      await this.logOperation(
+        'cleanup',
+        'success',
+        `清理旧备份: 删除了 ${deletedCount} 个文件`
+      )
 
       return {
         success: true,
@@ -201,7 +241,10 @@ export class SecurityManager {
     }
   }
 
-  async validateConfigFile(configPath: string, content: string): Promise<SecurityResult> {
+  async validateConfigFile(
+    configPath: string,
+    content: string
+  ): Promise<SecurityResult> {
     try {
       const issues: string[] = []
 
@@ -269,13 +312,20 @@ export class SecurityManager {
         result.error = `发现 ${issues.length} 个安全或语法问题`
       }
 
-      await this.logOperation('validate', issues.length === 0 ? 'success' : 'warning',
-        `验证配置文件: ${configPath} - ${issues.length} 个问题`)
+      await this.logOperation(
+        'validate',
+        issues.length === 0 ? 'success' : 'warning',
+        `验证配置文件: ${configPath} - ${issues.length} 个问题`
+      )
 
       return result
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知错误'
-      await this.logOperation('validate', 'failed', `验证失败: ${configPath} - ${errorMessage}`)
+      await this.logOperation(
+        'validate',
+        'failed',
+        `验证失败: ${configPath} - ${errorMessage}`
+      )
 
       return {
         success: false,
@@ -288,7 +338,7 @@ export class SecurityManager {
     try {
       await this.ensureBackupDir()
 
-      if (!await this.fileExists(this.logFile)) {
+      if (!(await this.fileExists(this.logFile))) {
         return {
           success: true,
           data: []
@@ -332,7 +382,11 @@ export class SecurityManager {
     }
   }
 
-  private async logOperation(operation: string, status: string, message: string): Promise<void> {
+  private async logOperation(
+    operation: string,
+    status: string,
+    message: string
+  ): Promise<void> {
     try {
       await this.ensureBackupDir()
 
@@ -353,7 +407,7 @@ export class SecurityManager {
 
   async checkFilePermissions(configPath: string): Promise<SecurityResult> {
     try {
-      if (!await this.fileExists(configPath)) {
+      if (!(await this.fileExists(configPath))) {
         return {
           success: true,
           message: '文件不存在，将创建新文件'
@@ -401,7 +455,9 @@ export class SecurityManager {
       ])
 
       const report = {
-        backupsCount: backupsResult.success ? backupsResult.data?.length || 0 : 0,
+        backupsCount: backupsResult.success
+          ? backupsResult.data?.length || 0
+          : 0,
         recentOperations: logsResult.success ? logsResult.data || [] : [],
         systemInfo: {
           user: process.env.USER,
