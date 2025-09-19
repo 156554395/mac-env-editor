@@ -4,7 +4,9 @@
     <div class="app-header">
       <div class="header-left">
         <div class="app-logo">
-          <div class="logo-icon">⚙️</div>
+          <div class="logo-icon">
+            <el-icon size="24"><Setting /></el-icon>
+          </div>
           <h1 class="app-title">环境变量管理器</h1>
         </div>
         <div v-if="shellInfo" class="shell-info-badge">
@@ -95,7 +97,9 @@
                 class="category-icon"
                 :style="{ backgroundColor: category.color }"
               >
-                {{ getCategoryIcon(category.name) }}
+                <el-icon size="20">
+                  <component :is="getCategoryIcon(category.name)" />
+                </el-icon>
               </div>
               <div class="category-info">
                 <span class="category-name">{{ category.name }}</span>
@@ -464,7 +468,11 @@ import {
   Plus,
   Edit,
   Delete,
-  CopyDocument
+  CopyDocument,
+  Setting,
+  Grid,
+  Link,
+  Guide
 } from '@element-plus/icons-vue'
 import { EnvironmentVariable, ShellInfo, EnvData } from '../../types'
 
@@ -1147,15 +1155,15 @@ const handleAdd = (type?: 'env' | 'alias') => {
 const getCategoryIcon = (categoryName: string) => {
   switch (categoryName) {
     case 'all':
-      return '📋'
+      return 'Grid'
     case '环境变量':
-      return '⚙️'
+      return 'Setting'
     case '别名':
-      return '🔗'
+      return 'Link'
     case 'PATH':
-      return '🛤️'
+      return 'Guide'
     default:
-      return '📄'
+      return 'Document'
   }
 }
 
@@ -1457,7 +1465,10 @@ onBeforeUnmount(() => {
 }
 
 .logo-icon {
-  font-size: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #667eea;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 

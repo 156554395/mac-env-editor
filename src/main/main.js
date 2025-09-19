@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, Tray, Menu } from 'electron';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
@@ -6,36 +6,223 @@ class EnvEditor {
     constructor() {
         this.mainWindow = null;
         this.ipcSetup = false; // 标记IPC是否已经设置
+        this.tray = null;
+        this.isQuitting = false; // 标记应用是否正在退出
         this.init();
         this.setupIPC(); // 在构造函数中设置IPC，只执行一次
     }
     init() {
         app.whenReady().then(() => {
+            this.createTray();
             this.createWindow();
             app.on('activate', () => {
                 if (BrowserWindow.getAllWindows().length === 0) {
                     this.createWindow();
                 }
+                else {
+                    this.mainWindow?.show();
+                }
             });
         });
         app.on('window-all-closed', () => {
+            // 在非macOS平台下，关闭所有窗口时退出应用
+            // 在macOS下，即使窗口关闭，应用也继续运行在托盘中
             if (process.platform !== 'darwin') {
                 app.quit();
             }
         });
+        // 添加before-quit事件处理，确保用户可以完全退出应用
+        app.on('before-quit', () => {
+            // 设置标记，表示应用正在退出，防止窗口关闭事件阻止退出
+            this.isQuitting = true;
+        });
+    }
+    createTray() {
+        const { nativeImage } = require('electron');
+        // 使用提供的图标文件
+        let trayIcon;
+        // 尝试不同的图标路径，开发环境和生产环境
+        const iconPaths = [
+            // 开发环境路径 - 优先使用PNG格式
+            path.join(process.cwd(), 'src/assets/icon.png'),
+            path.join(__dirname, '../src/assets/icon.png'),
+            path.join(__dirname, '../../src/assets/icon.png'),
+            // 开发环境 - ICNS格式
+            path.join(process.cwd(), 'build/Icon.icns'),
+            path.join(__dirname, '../build/Icon.icns'),
+            path.join(__dirname, '../../build/Icon.icns'),
+            // 生产环境路径
+            path.join(process.resourcesPath, 'build/Icon.icns'),
+            path.join(app.getAppPath(), 'build/Icon.icns')
+        ];
+        console.log('开发环境图标路径查找:');
+        for (const iconPath of iconPaths) {
+            console.log(`尝试路径: ${iconPath}`);
+            try {
+                if (fs.existsSync(iconPath)) {
+                    console.log(`✓ 找到图标文件: ${iconPath}`);
+                    trayIcon = nativeImage.createFromPath(iconPath);
+                    console.log(`图标对象创建状态: isEmpty=${trayIcon.isEmpty()}, size=${trayIcon.getSize()}`);
+                    if (!trayIcon.isEmpty()) {
+                        // 调整图标大小并设置为模板图像
+                        trayIcon = trayIcon.resize({ width: 18, height: 18 });
+                        trayIcon.setTemplateImage(true); // 设置为模板图像，适配系统主题
+                        console.log('✓ 成功创建并调整托盘图标');
+                        break;
+                    }
+                    else {
+                        console.log('✗ 图标对象为空，继续尝试下一个路径');
+                    }
+                }
+                else {
+                    console.log(`✗ 文件不存在: ${iconPath}`);
+                }
+            }
+            catch (error) {
+                console.log(`✗ 加载失败: ${iconPath} - ${error}`);
+                continue;
+            }
+        }
+        // 如果找不到图标文件，使用系统默认图标
+        if (!trayIcon || trayIcon.isEmpty()) {
+            // 使用系统内置的图标，而不是自绘图标
+            trayIcon = nativeImage.createEmpty();
+            console.warn('应用图标未找到，将使用系统默认图标');
+        }
+        else {
+            console.log('✓ 成功加载托盘图标');
+        }
+        this.tray = new Tray(trayIcon);
+        // 设置托盘菜单
+        const contextMenu = Menu.buildFromTemplate([
+            {
+                label: '显示应用',
+                click: () => {
+                    this.showWindow();
+                }
+            },
+            {
+                label: '隐藏应用',
+                click: () => {
+                    this.hideWindow();
+                }
+            },
+            { type: 'separator' },
+            {
+                label: '退出',
+                click: () => {
+                    app.quit();
+                }
+            }
+        ]);
+        this.tray.setContextMenu(contextMenu);
+        this.tray.setToolTip('Mac 环境变量编辑器');
+        // 点击托盘图标显示/隐藏窗口
+        this.tray.on('click', () => {
+            if (this.mainWindow?.isVisible()) {
+                this.hideWindow();
+            }
+            else {
+                this.showWindow();
+            }
+        });
+    }
+    showWindow() {
+        if (this.mainWindow) {
+            this.mainWindow.show();
+            this.mainWindow.focus();
+        }
+        else {
+            this.createWindow();
+        }
+    }
+    hideWindow() {
+        if (this.mainWindow) {
+            this.mainWindow.hide();
+        }
     }
     createWindow() {
-        this.mainWindow = new BrowserWindow({
+        // 设置应用图标
+        const { nativeImage } = require('electron');
+        let appIcon = null;
+        // 尝试加载现有图标文件，开发环境和生产环境
+        const iconPaths = [
+            // 开发环境路径 - 优先使用PNG格式
+            path.join(process.cwd(), 'src/assets/icon.png'),
+            path.join(__dirname, '../src/assets/icon.png'),
+            path.join(__dirname, '../../src/assets/icon.png'),
+            // 开发环境 - ICNS格式
+            path.join(process.cwd(), 'build/Icon.icns'),
+            path.join(__dirname, '../build/Icon.icns'),
+            path.join(__dirname, '../../build/Icon.icns'),
+            // 生产环境路径
+            path.join(process.resourcesPath, 'build/Icon.icns'),
+            path.join(app.getAppPath(), 'build/Icon.icns')
+        ];
+        console.log('主窗口图标路径查找:');
+        for (const iconPath of iconPaths) {
+            console.log(`尝试路径: ${iconPath}`);
+            try {
+                if (fs.existsSync(iconPath)) {
+                    console.log(`✓ 找到图标文件: ${iconPath}`);
+                    appIcon = nativeImage.createFromPath(iconPath);
+                    console.log(`主窗口图标对象创建状态: isEmpty=${appIcon.isEmpty()}, size=${appIcon.getSize()}`);
+                    if (!appIcon.isEmpty()) {
+                        console.log('✓ 成功创建主窗口图标');
+                        break;
+                    }
+                    else {
+                        console.log('✗ 主窗口图标对象为空，继续尝试下一个路径');
+                    }
+                }
+                else {
+                    console.log(`✗ 文件不存在: ${iconPath}`);
+                }
+            }
+            catch (error) {
+                console.log(`✗ 加载失败: ${iconPath} - ${error}`);
+                continue;
+            }
+        }
+        const windowOptions = {
             width: 1200,
             height: 800,
             minWidth: 1000,
             minHeight: 700,
             center: true,
+            show: false, // 先不显示，等准备好再显示
+            skipTaskbar: false, // 确保在任务栏显示
             title: 'Mac 环境变量编辑器',
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
                 preload: path.join(__dirname, 'preload.js')
+            }
+        };
+        // 如果成功加载图标，则设置图标
+        if (appIcon && !appIcon.isEmpty()) {
+            windowOptions.icon = appIcon;
+            console.log('✓ 成功设置主窗口图标');
+        }
+        else {
+            console.log('✗ 主窗口图标未设置，使用系统默认');
+        }
+        this.mainWindow = new BrowserWindow(windowOptions);
+        // 窗口准备好后显示并获得焦点
+        this.mainWindow.once('ready-to-show', () => {
+            this.mainWindow?.show();
+            this.mainWindow?.focus();
+            // 在 macOS 上强制应用到前台
+            if (process.platform === 'darwin') {
+                app.focus({ steal: true });
+            }
+        });
+        // 处理窗口关闭事件 - 隐藏到托盘而不是退出
+        this.mainWindow.on('close', (event) => {
+            if (process.platform === 'darwin' && !this.isQuitting) {
+                event.preventDefault();
+                this.hideWindow();
+                return false;
             }
         });
         // 开发环境使用dev server

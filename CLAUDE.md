@@ -152,3 +152,7 @@ pnpm install         # 安装所有依赖
 - 所有 IPC 调用返回统一格式: `{ success: boolean, data?: any, error?: string }`
 - 使用 preload 脚本暴露安全的 IPC 接口
 - 渲染进程通过 `window.electronAPI` 访问主进程功能
+
+#### 其它说明
+
+- src/下的js文件动态生成，修改时不用去修改，只修改src/下的ts文件即可
