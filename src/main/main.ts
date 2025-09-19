@@ -1,4 +1,14 @@
-import { app, BrowserWindow, ipcMain, shell, Tray, Menu } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  shell,
+  Tray,
+  Menu,
+  nativeImage,
+  NativeImage,
+  Event
+} from 'electron'
 import * as path from 'path'
 import * as os from 'os'
 import * as fs from 'fs'
@@ -48,10 +58,8 @@ class EnvEditor {
   }
 
   private createTray() {
-    const { nativeImage } = require('electron')
-
     // 使用提供的图标文件
-    let trayIcon: any
+    let trayIcon: NativeImage | null = null
 
     console.log('托盘图标路径查找:')
 
@@ -90,7 +98,9 @@ class EnvEditor {
         if (fs.existsSync(iconPath)) {
           console.log(`✓ 找到图标文件: ${iconPath}`)
           trayIcon = nativeImage.createFromPath(iconPath)
-          console.log(`图标对象创建状态: isEmpty=${trayIcon.isEmpty()}, size=${JSON.stringify(trayIcon.getSize())}`)
+          console.log(
+            `图标对象创建状态: isEmpty=${trayIcon.isEmpty()}, size=${JSON.stringify(trayIcon.getSize())}`
+          )
 
           if (!trayIcon.isEmpty()) {
             // 调整图标大小并设置为模板图像
@@ -149,7 +159,9 @@ class EnvEditor {
 
     // 点击托盘图标显示窗口
     this.tray.on('click', () => {
-      console.log(`Tray click - Window exists: ${!!this.mainWindow}, isDestroyed: ${this.mainWindow?.isDestroyed()}, isVisible: ${this.mainWindow?.isVisible()}`)
+      console.log(
+        `Tray click - Window exists: ${!!this.mainWindow}, isDestroyed: ${this.mainWindow?.isDestroyed()}, isVisible: ${this.mainWindow?.isVisible()}`
+      )
       this.showWindow()
     })
   }
@@ -175,8 +187,7 @@ class EnvEditor {
 
   private createWindow() {
     // 设置应用图标
-    const { nativeImage } = require('electron')
-    let appIcon: any = null
+    let appIcon: NativeImage | null = null
 
     // 尝试加载现有图标文件，开发环境和生产环境
     const iconPaths = [
@@ -200,7 +211,9 @@ class EnvEditor {
         if (fs.existsSync(iconPath)) {
           console.log(`✓ 找到图标文件: ${iconPath}`)
           appIcon = nativeImage.createFromPath(iconPath)
-          console.log(`主窗口图标对象创建状态: isEmpty=${appIcon.isEmpty()}, size=${appIcon.getSize()}`)
+          console.log(
+            `主窗口图标对象创建状态: isEmpty=${appIcon.isEmpty()}, size=${appIcon.getSize()}`
+          )
           if (!appIcon.isEmpty()) {
             console.log('✓ 成功创建主窗口图标')
             break
@@ -257,7 +270,7 @@ class EnvEditor {
     })
 
     // 处理窗口关闭事件 - 隐藏到托盘而不是退出
-    this.mainWindow.on('close', (event) => {
+    this.mainWindow.on('close', (event: Event) => {
       if (process.platform === 'darwin' && !this.isQuitting) {
         event.preventDefault()
         this.hideWindow()

@@ -422,9 +422,9 @@
                     type="text"
                     size="small"
                     class="copy-btn"
-                    @click="copyToClipboard(log.fullOldValue || log.oldValue)"
                     :icon="CopyDocument"
                     title="复制原值"
+                    @click="copyToClipboard(log.fullOldValue || log.oldValue)"
                   />
                 </div>
               </div>
@@ -436,9 +436,9 @@
                     type="text"
                     size="small"
                     class="copy-btn"
-                    @click="copyToClipboard(log.fullNewValue || log.newValue)"
                     :icon="CopyDocument"
                     title="复制新值"
+                    @click="copyToClipboard(log.fullNewValue || log.newValue)"
                   />
                 </div>
               </div>
@@ -469,10 +469,7 @@ import {
   Edit,
   Delete,
   CopyDocument,
-  Setting,
-  Grid,
-  Link,
-  Guide
+  Setting
 } from '@element-plus/icons-vue'
 import { EnvironmentVariable, ShellInfo, EnvData } from '../../types'
 
@@ -531,8 +528,8 @@ interface OperationLog {
   key: string
   oldValue?: string
   newValue?: string
-  fullOldValue?: string  // 完整的原值（用于复制）
-  fullNewValue?: string  // 完整的新值（用于复制）
+  fullOldValue?: string // 完整的原值（用于复制）
+  fullNewValue?: string // 完整的新值（用于复制）
   timestamp: Date
   description: string
 }
@@ -561,7 +558,10 @@ const loadOperationLogs = () => {
 // 保存操作日志到本地存储
 const saveOperationLogs = () => {
   try {
-    localStorage.setItem('env-editor-operation-logs', JSON.stringify(operationLogs.value))
+    localStorage.setItem(
+      'env-editor-operation-logs',
+      JSON.stringify(operationLogs.value)
+    )
   } catch (error) {
     console.error('保存操作日志失败:', error)
   }
@@ -1064,14 +1064,14 @@ const handleSave = async () => {
             '环境变量',
             sourceFileName.value || '配置文件',
             `修改了配置文件 "${sourceFileName.value || '配置文件'}" 的源码内容`,
-            originalSourceContent.value.length > 300 ?
-              originalSourceContent.value.substring(0, 300) + '...' :
-              originalSourceContent.value,
-            sourceContent.value.length > 300 ?
-              sourceContent.value.substring(0, 300) + '...' :
-              sourceContent.value,
-            originalSourceContent.value,  // 完整的原值
-            sourceContent.value           // 完整的新值
+            originalSourceContent.value.length > 300
+              ? originalSourceContent.value.substring(0, 300) + '...'
+              : originalSourceContent.value,
+            sourceContent.value.length > 300
+              ? sourceContent.value.substring(0, 300) + '...'
+              : sourceContent.value,
+            originalSourceContent.value, // 完整的原值
+            sourceContent.value // 完整的新值
           )
 
           originalSourceContent.value = sourceContent.value
