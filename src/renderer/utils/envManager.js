@@ -16,7 +16,8 @@ export class EnvManager {
                 const parsed = Object.entries(result.data).map(([key, value]) => ({
                     key,
                     value: value,
-                    isValid: this.validateEnvironmentVariable(key, value)
+                    isValid: this.validateEnvironmentVariable(key, value),
+                    type: 'env'
                 }));
                 this.envVars = parsed.sort((a, b) => a.key.localeCompare(b.key));
                 return this.envVars;
@@ -53,7 +54,10 @@ export class EnvManager {
                 acc[env.key] = env.value;
                 return acc;
             }, {});
-            const result = await window.electronAPI.saveEnvVars(envMap);
+            const result = await window.electronAPI.saveEnvVars({
+                env: envMap,
+                aliases: {}
+            });
             if (result.success) {
                 this.envVars = envVars;
             }
@@ -84,7 +88,8 @@ export class EnvManager {
         const newVar = {
             key: key.toUpperCase(),
             value,
-            isValid: this.validateEnvironmentVariable(key, value)
+            isValid: this.validateEnvironmentVariable(key, value),
+            type: 'env'
         };
         this.envVars.push(newVar);
         this.envVars.sort((a, b) => a.key.localeCompare(b.key));
@@ -127,10 +132,10 @@ export class EnvManager {
         }
         return this.envVars.some((env, index) => {
             const original = originalEnvVars[index];
-            return !original ||
+            return (!original ||
                 env.key !== original.key ||
                 env.value !== original.value ||
-                env.isValid !== original.isValid;
+                env.isValid !== original.isValid);
         });
     }
     validateEnvironmentVariable(key, value) {
@@ -192,16 +197,25 @@ export class EnvManager {
             if (key.includes('PATH')) {
                 categories.path.push(env);
             }
-            else if (key.includes('SHELL') || key.includes('HOME') || key.includes('USER') || key.includes('TERM')) {
+            else if (key.includes('SHELL') ||
+                key.includes('HOME') ||
+                key.includes('USER') ||
+                key.includes('TERM')) {
                 categories.system.push(env);
             }
             else if (key.includes('LANG') || key.includes('LC_')) {
                 categories.shell.push(env);
             }
-            else if (key.includes('NODE_') || key.includes('NPM_') || key.includes('PYTHON') || key.includes('JAVA_') || key.includes('GO')) {
+            else if (key.includes('NODE_') ||
+                key.includes('NPM_') ||
+                key.includes('PYTHON') ||
+                key.includes('JAVA_') ||
+                key.includes('GO')) {
                 categories.development.push(env);
             }
-            else if (key.includes('HTTP_') || key.includes('DATABASE_') || key.includes('APP_')) {
+            else if (key.includes('HTTP_') ||
+                key.includes('DATABASE_') ||
+                key.includes('APP_')) {
                 categories.application.push(env);
             }
             else {

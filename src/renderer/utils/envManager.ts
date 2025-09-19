@@ -1,5 +1,4 @@
 import { EnvironmentVariable, ShellInfo } from '../../types'
-import { ConfigParser } from './configParser'
 
 export class EnvManager {
   private static instance: EnvManager
@@ -21,7 +20,8 @@ export class EnvManager {
         const parsed = Object.entries(result.data).map(([key, value]) => ({
           key,
           value: value as string,
-          isValid: this.validateEnvironmentVariable(key, value as string)
+          isValid: this.validateEnvironmentVariable(key, value as string),
+          type: 'env' as const
         }))
 
         this.envVars = parsed.sort((a, b) => a.key.localeCompare(b.key))
@@ -66,7 +66,10 @@ export class EnvManager {
         {} as { [key: string]: string }
       )
 
-      const result = await window.electronAPI.saveEnvVars(envMap)
+      const result = await window.electronAPI.saveEnvVars({
+        env: envMap,
+        aliases: {}
+      })
 
       if (result.success) {
         this.envVars = envVars
@@ -77,7 +80,7 @@ export class EnvManager {
       console.error('保存环境变量失败:', error)
       return {
         success: false,
-        error: error.message
+        error: (error as Error).message
       }
     }
   }
@@ -92,7 +95,7 @@ export class EnvManager {
       console.error('备份配置失败:', error)
       return {
         success: false,
-        error: error.message
+        error: (error as Error).message
       }
     }
   }
@@ -101,7 +104,8 @@ export class EnvManager {
     const newVar: EnvironmentVariable = {
       key: key.toUpperCase(),
       value,
-      isValid: this.validateEnvironmentVariable(key, value)
+      isValid: this.validateEnvironmentVariable(key, value),
+      type: 'env' as const
     }
 
     this.envVars.push(newVar)
@@ -241,7 +245,9 @@ export class EnvManager {
   getEnvironmentVariableByCategory(): {
     [category: string]: EnvironmentVariable[]
   } {
-    const categories = {
+    const categories: {
+      [category: string]: EnvironmentVariable[]
+    } = {
       system: [],
       path: [],
       shell: [],

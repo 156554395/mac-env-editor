@@ -51,7 +51,7 @@ export class SecurityManager {
     }
     async restoreFromBackup(backupPath, configPath) {
         try {
-            if (!await this.fileExists(backupPath)) {
+            if (!(await this.fileExists(backupPath))) {
                 return {
                     success: false,
                     error: '备份文件不存在'
@@ -109,7 +109,7 @@ export class SecurityManager {
     }
     async deleteBackup(backupPath) {
         try {
-            if (!await this.fileExists(backupPath)) {
+            if (!(await this.fileExists(backupPath))) {
                 return {
                     success: false,
                     error: '备份文件不存在'
@@ -232,7 +232,7 @@ export class SecurityManager {
     async getOperationLogs(limit = 100) {
         try {
             await this.ensureBackupDir();
-            if (!await this.fileExists(this.logFile)) {
+            if (!(await this.fileExists(this.logFile))) {
                 return {
                     success: true,
                     data: []
@@ -293,7 +293,7 @@ export class SecurityManager {
     }
     async checkFilePermissions(configPath) {
         try {
-            if (!await this.fileExists(configPath)) {
+            if (!(await this.fileExists(configPath))) {
                 return {
                     success: true,
                     message: '文件不存在，将创建新文件'
@@ -307,7 +307,7 @@ export class SecurityManager {
             if (stats.mode & 0o020) {
                 issues.push('文件对所属组可写，建议检查权限设置');
             }
-            if (stats.uid !== process.getuid?.() ?? 0) {
+            if (stats.uid !== (process.getuid?.() ?? null)) {
                 issues.push('文件所有者不是当前用户');
             }
             return {
@@ -335,7 +335,9 @@ export class SecurityManager {
                 this.getOperationLogs(50)
             ]);
             const report = {
-                backupsCount: backupsResult.success ? backupsResult.data?.length || 0 : 0,
+                backupsCount: backupsResult.success
+                    ? backupsResult.data?.length || 0
+                    : 0,
                 recentOperations: logsResult.success ? logsResult.data || [] : [],
                 systemInfo: {
                     user: process.env.USER,

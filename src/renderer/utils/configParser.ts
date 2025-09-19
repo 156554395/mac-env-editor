@@ -16,6 +16,7 @@ export class ConfigParser {
           envVars.push({
             key: match[1].trim(),
             value: this.unquoteValue(match[2].trim()),
+            type: 'env',
             isValid: this.validateEnvironmentVariable(
               match[1].trim(),
               match[2].trim()
@@ -111,7 +112,6 @@ export class ConfigParser {
 
   static async getConfigFileInfo(filePath: string): Promise<ConfigFile> {
     const fs = require('fs').promises
-    const path = require('path')
 
     try {
       const stats = await fs.stat(filePath)
@@ -122,7 +122,7 @@ export class ConfigParser {
         content,
         lastModified: stats.mtime
       }
-    } catch (error) {
+    } catch {
       return {
         path: filePath,
         exists: false,

@@ -162,8 +162,8 @@ describe('EnvManager', () => {
     it('应该能够搜索别名', () => {
       const searchTerm = 'ls'
       const aliases = mockEnvData.aliases
-      const results = Object.entries(aliases).filter(([key, value]) =>
-        key.includes(searchTerm) || value.includes(searchTerm)
+      const results = Object.entries(aliases).filter(
+        ([key, value]) => key.includes(searchTerm) || value.includes(searchTerm)
       )
 
       expect(results.length).toBeGreaterThan(0)

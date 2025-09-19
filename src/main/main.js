@@ -47,6 +47,8 @@ class EnvEditor {
         ipcMain.handle('save-env-vars', this.handleSaveEnvVars.bind(this));
         ipcMain.handle('backup-config', this.handleBackupConfig.bind(this));
         ipcMain.handle('get-shell-info', this.handleGetShellInfo.bind(this));
+        ipcMain.handle('get-config-file-content', this.handleGetConfigFileContent.bind(this));
+        ipcMain.handle('save-config-file-content', this.handleSaveConfigFileContent.bind(this));
     }
     async handleGetEnvVars() {
         try {
@@ -73,12 +75,11 @@ class EnvEditor {
             return { success: true, data: result };
         }
         catch (error) {
-            return { success: false, error: error.message };
+            return { success: false, error: error?.message || String(error) };
         }
     }
     async handleSaveEnvVars(event, data) {
         try {
-            const homedir = os.homedir();
             const configFile = this.getPrimaryConfigFile();
             await this.handleBackupConfig(null, configFile);
             let content = '';
@@ -88,13 +89,16 @@ class EnvEditor {
                 content = this.updateAliases(content, data.aliases || {});
             }
             else {
-                content = this.generateEnvVarsContent(data.env || {}) + '\n' + this.generateAliasesContent(data.aliases || {});
+                content =
+                    this.generateEnvVarsContent(data.env || {}) +
+                        '\n' +
+                        this.generateAliasesContent(data.aliases || {});
             }
             await fs.promises.writeFile(configFile, content, 'utf-8');
             return { success: true, message: '环境变量和别名已保存', configFile };
         }
         catch (error) {
-            return { success: false, error: error.message };
+            return { success: false, error: error?.message || String(error) };
         }
     }
     async handleBackupConfig(event, configFile) {
@@ -110,7 +114,7 @@ class EnvEditor {
             }
         }
         catch (error) {
-            return { success: false, error: error.message };
+            return { success: false, error: error?.message || String(error) };
         }
     }
     async handleGetShellInfo() {
@@ -128,7 +132,53 @@ class EnvEditor {
             };
         }
         catch (error) {
-            return { success: false, error: error.message };
+            return { success: false, error: error?.message || String(error) };
+        }
+    }
+    async handleGetConfigFileContent(event, configFile) {
+        try {
+            const targetPath = configFile || this.getPrimaryConfigFile();
+            if (await this.fileExists(targetPath)) {
+                const content = await fs.promises.readFile(targetPath, 'utf-8');
+                return {
+                    success: true,
+                    data: {
+                        content,
+                        filePath: targetPath,
+                        fileName: path.basename(targetPath)
+                    }
+                };
+            }
+            else {
+                return {
+                    success: true,
+                    data: {
+                        content: '',
+                        filePath: targetPath,
+                        fileName: path.basename(targetPath)
+                    }
+                };
+            }
+        }
+        catch (error) {
+            return { success: false, error: error?.message || String(error) };
+        }
+    }
+    async handleSaveConfigFileContent(event, data) {
+        try {
+            const targetPath = data.filePath || this.getPrimaryConfigFile();
+            // 创建备份
+            await this.handleBackupConfig(null, targetPath);
+            // 保存新内容
+            await fs.promises.writeFile(targetPath, data.content, 'utf-8');
+            return {
+                success: true,
+                message: '配置文件已保存',
+                filePath: targetPath
+            };
+        }
+        catch (error) {
+            return { success: false, error: error?.message || String(error) };
         }
     }
     async fileExists(filePath) {
@@ -157,20 +207,29 @@ class EnvEditor {
     updateEnvVars(content, envVars) {
         const lines = content.split('\n');
         const processedKeys = new Set();
-        const result = lines.map(line => {
+        // 第一步：更新或删除现有的 export 行
+        const result = lines
+            .map(line => {
             const trimmed = line.trim();
             if (trimmed && !trimmed.startsWith('#')) {
                 const match = trimmed.match(/^export\s+([^=]+)=(.*)$/);
                 if (match) {
                     const key = match[1].trim();
                     if (envVars.hasOwnProperty(key)) {
+                        // 更新现有变量
                         processedKeys.add(key);
                         return `export ${key}="${envVars[key]}"`;
+                    }
+                    else {
+                        // 删除不在新数据中的变量（返回空字符串）
+                        return '';
                     }
                 }
             }
             return line;
-        });
+        })
+            .filter(line => line !== ''); // 过滤掉空行（被删除的变量）
+        // 第二步：添加新变量
         for (const [key, value] of Object.entries(envVars)) {
             if (!processedKeys.has(key)) {
                 result.push(`export ${key}="${value}"`);
@@ -201,20 +260,29 @@ class EnvEditor {
     updateAliases(content, aliases) {
         const lines = content.split('\n');
         const processedKeys = new Set();
-        const result = lines.map(line => {
+        // 第一步：更新或删除现有的 alias 行
+        const result = lines
+            .map(line => {
             const trimmed = line.trim();
             if (trimmed && !trimmed.startsWith('#')) {
                 const match = trimmed.match(/^alias\s+([^=]+)=(.*)$/);
                 if (match) {
                     const key = match[1].trim();
                     if (aliases.hasOwnProperty(key)) {
+                        // 更新现有别名
                         processedKeys.add(key);
                         return `alias ${key}="${aliases[key]}"`;
+                    }
+                    else {
+                        // 删除不在新数据中的别名（返回空字符串）
+                        return '';
                     }
                 }
             }
             return line;
-        });
+        })
+            .filter(line => line !== ''); // 过滤掉空行（被删除的别名）
+        // 第二步：添加新别名
         for (const [key, value] of Object.entries(aliases)) {
             if (!processedKeys.has(key)) {
                 result.push(`alias ${key}="${value}"`);

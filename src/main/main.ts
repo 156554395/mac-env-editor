@@ -1,13 +1,7 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import * as path from 'path'
 import * as os from 'os'
 import * as fs from 'fs'
-import { spawn } from 'child_process'
-
-interface EnvData {
-  env: { [key: string]: string }
-  aliases: { [key: string]: string }
-}
 
 class EnvEditor {
   private mainWindow: BrowserWindow | null = null
@@ -108,7 +102,6 @@ class EnvEditor {
     data: { env: { [key: string]: string }; aliases: { [key: string]: string } }
   ) {
     try {
-      const homedir = os.homedir()
       const configFile = this.getPrimaryConfigFile()
 
       await this.handleBackupConfig(null, configFile)

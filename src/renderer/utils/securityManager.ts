@@ -425,7 +425,7 @@ export class SecurityManager {
         issues.push('文件对所属组可写，建议检查权限设置')
       }
 
-      if (stats.uid !== process.getuid?.() ?? 0) {
+      if (stats.uid !== (process.getuid?.() ?? null)) {
         issues.push('文件所有者不是当前用户')
       }
 

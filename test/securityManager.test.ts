@@ -20,7 +20,8 @@ describe('SecurityManager', () => {
       mockElectronAPI.backupConfig.mockResolvedValue({
         success: true,
         data: {
-          backupPath: '/Users/test/.env-editor-backups/zshrc_20240119_143022.bak',
+          backupPath:
+            '/Users/test/.env-editor-backups/zshrc_20240119_143022.bak',
           timestamp: '2024-01-19T14:30:22.000Z'
         }
       })
@@ -110,10 +111,10 @@ describe('SecurityManager', () => {
       ]
 
       const unsafePatterns = [
-        /\$\([^)]*\)/,  // Command substitution $()
-        /`[^`]*`/,      // Command substitution ``
-        /;.*rm/,        // Chained dangerous commands
-        /\|\s*sh/       // Pipe to shell
+        /\$\([^)]*\)/, // Command substitution $()
+        /`[^`]*`/, // Command substitution ``
+        /;.*rm/, // Chained dangerous commands
+        /\|\s*sh/ // Pipe to shell
       ]
 
       values.forEach(({ value, safe }) => {
@@ -126,16 +127,16 @@ describe('SecurityManager', () => {
   describe('文件权限检查', () => {
     it('应该检查文件权限格式', () => {
       const permissions = [
-        { perm: '644', safe: true },   // rw-r--r--
-        { perm: '755', safe: true },   // rwxr-xr-x
-        { perm: '777', safe: false },  // rwxrwxrwx (too permissive)
-        { perm: '600', safe: true },   // rw-------
-        { perm: '666', safe: false }   // rw-rw-rw- (world writable)
+        { perm: '644', safe: true }, // rw-r--r--
+        { perm: '755', safe: true }, // rwxr-xr-x
+        { perm: '777', safe: false }, // rwxrwxrwx (too permissive)
+        { perm: '600', safe: true }, // rw-------
+        { perm: '666', safe: false } // rw-rw-rw- (world writable)
       ]
 
       permissions.forEach(({ perm, safe }) => {
         const octal = parseInt(perm, 8)
-        const worldWritable = (octal & 0o002) !== 0  // Check if world-writable
+        const worldWritable = (octal & 0o002) !== 0 // Check if world-writable
         const isSafe = !worldWritable || perm === '755' // 755 is acceptable
 
         expect(isSafe).toBe(safe)
@@ -147,8 +148,8 @@ describe('SecurityManager', () => {
     it('应该验证文件大小限制', () => {
       const maxSize = 1024 * 1024 // 1MB
       const testSizes = [
-        { size: 1024, valid: true },           // 1KB
-        { size: 512 * 1024, valid: true },    // 512KB
+        { size: 1024, valid: true }, // 1KB
+        { size: 512 * 1024, valid: true }, // 512KB
         { size: 2 * 1024 * 1024, valid: false } // 2MB
       ]
 
@@ -167,16 +168,17 @@ describe('SecurityManager', () => {
       ]
 
       const validPatterns = [
-        /^export\s+\w+=/,     // Export statements
-        /^alias\s+\w+=/,      // Alias definitions
-        /^#.*$/,              // Comments
-        /^\s*$/,              // Empty lines
-        /^[a-zA-Z_]\w*=/      // Direct assignments
+        /^export\s+\w+=/, // Export statements
+        /^alias\s+\w+=/, // Alias definitions
+        /^#.*$/, // Comments
+        /^\s*$/, // Empty lines
+        /^[a-zA-Z_]\w*=/ // Direct assignments
       ]
 
       configLines.forEach(line => {
-        const isValid = validPatterns.some(pattern => pattern.test(line)) ||
-                       line === 'invalid line without proper format' // Known invalid for testing
+        const isValid =
+          validPatterns.some(pattern => pattern.test(line)) ||
+          line === 'invalid line without proper format' // Known invalid for testing
 
         if (line === 'invalid line without proper format') {
           expect(isValid).toBe(true) // This line is intentionally invalid for testing

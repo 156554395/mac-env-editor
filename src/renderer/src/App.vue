@@ -295,7 +295,7 @@
               </el-table-column>
 
               <el-table-column width="120" label="操作" align="center">
-                <template #default="{ row, $index }">
+                <template #default="{ $index }">
                   <el-button
                     type="danger"
                     size="large"
@@ -368,7 +368,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, ArrowDown } from '@element-plus/icons-vue'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { EnvironmentVariable, ShellInfo, EnvData } from '../../types'
 
 declare global {
@@ -637,7 +637,7 @@ const handleRefresh = () => {
 }
 
 const handleValueChange = (row: EnvironmentVariable) => {
-  row.isValid = validateEnvironmentVariable(row.key, row.value)
+  row.isValid = validateEnvironmentVariable(row.key)
   checkChanges()
   scheduleAutoSave()
 }
@@ -657,7 +657,7 @@ const handleKeyChange = (row: EnvironmentVariable) => {
   scheduleAutoSave()
 }
 
-const validateEnvironmentVariable = (key: string, value: string): boolean => {
+const validateEnvironmentVariable = (key: string): boolean => {
   if (!key || typeof key !== 'string') return false
 
   const keyRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/
@@ -667,7 +667,7 @@ const validateEnvironmentVariable = (key: string, value: string): boolean => {
 }
 
 const isVarNameValid = (name: string): boolean => {
-  return validateEnvironmentVariable(name, '')
+  return validateEnvironmentVariable(name)
 }
 
 const checkChanges = () => {
@@ -821,11 +821,6 @@ const getCategoryCount = (categoryName: string) => {
     return envVars.value.filter(v => v.key.includes('PATH')).length
   }
   return 0
-}
-
-const getCategoryColor = (categoryName: string) => {
-  const category = categories.value.find(c => c.name === categoryName)
-  return category?.color || '#909399'
 }
 
 const showAddDialog = () => {
