@@ -21,6 +21,10 @@ class EnvEditor {
                 }
                 else {
                     this.mainWindow?.show();
+                    // 显示程序坞图标
+                    if (app.dock) {
+                        app.dock.show();
+                    }
                 }
             });
         });
@@ -144,6 +148,10 @@ class EnvEditor {
         if (this.mainWindow) {
             this.mainWindow.show();
             this.mainWindow.focus();
+            // 显示程序坞图标
+            if (app.dock) {
+                app.dock.show();
+            }
         }
         else {
             this.createWindow();
@@ -225,9 +233,12 @@ class EnvEditor {
         this.mainWindow.once('ready-to-show', () => {
             this.mainWindow?.show();
             this.mainWindow?.focus();
-            // 在 macOS 上强制应用到前台
+            // 在 macOS 上强制应用到前台并显示程序坞图标
             if (process.platform === 'darwin') {
                 app.focus({ steal: true });
+                if (app.dock) {
+                    app.dock.show();
+                }
             }
         });
         // 处理窗口关闭事件 - 隐藏到托盘而不是退出
@@ -235,6 +246,10 @@ class EnvEditor {
             if (process.platform === 'darwin' && !this.isQuitting) {
                 event.preventDefault();
                 this.hideWindow();
+                // 隐藏程序坞图标，但保持应用运行和托盘图标显示
+                if (app.dock) {
+                    app.dock.hide();
+                }
                 return false;
             }
         });
