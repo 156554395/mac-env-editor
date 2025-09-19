@@ -7,7 +7,7 @@
 ![Node.js](https://img.shields.io/badge/node.js-v18+-brightgreen)
 ![Electron](https://img.shields.io/badge/electron-latest-blue)
 ![Vue.js](https://img.shields.io/badge/vue.js-v3-brightgreen)
-
+</div>
 一个现代化、直观的 macOS 环境变量和别名管理工具
 
 ### 💔 你是否也遇到过这些痛苦？
@@ -21,7 +21,7 @@ PATH 路径乱成一团，不知道哪个重复了？🤯
 **我们深知开发者的痛点！** 编辑配置文件本不应该这么复杂和危险。一个简单的 typo 就可能让你的开发环境崩溃，一个错误的 PATH 设置就能让所有命令失效。这种痛苦，我们都经历过！
 
 **是时候告别命令行的折磨了！** 让我们用可视化界面、智能提示和自动备份来拯救你的开发体验吧！ ✨
-
+<div align="center">
 [功能特性](#功能特性) • [安装使用](#安装使用) • [开发指南](#开发指南) • [贡献代码](#贡献代码)
 
 </div>
