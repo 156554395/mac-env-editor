@@ -1,7 +1,7 @@
 /// <reference types="../../../node_modules/.vue-global-types/vue_3.5_0_0_0.d.ts" />
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { ArrowDown, ChatDotRound, InfoFilled } from '@element-plus/icons-vue';
+import { ArrowDown, ChatDotRound, InfoFilled, Document, Plus, Edit, Delete } from '@element-plus/icons-vue';
 // 状态管理
 const envVars = ref([]);
 const originalEnvVars = ref([]);
@@ -10,6 +10,8 @@ const loading = ref(false);
 const saving = ref(false);
 const viewType = ref('all');
 const selectedCategory = ref('all');
+const operationLogs = ref([]);
+const showLogsDialog = ref(false);
 // 分类定义
 const categories = ref([
     { name: 'all', color: '#409eff', prefix: '' },
@@ -154,6 +156,24 @@ const filteredEnvVars = computed(() => {
     }
     return filtered;
 });
+// 操作日志记录函数
+const addOperationLog = (type, category, key, description, oldValue, newValue) => {
+    const log = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        type,
+        category,
+        key,
+        oldValue,
+        newValue,
+        timestamp: new Date(),
+        description
+    };
+    operationLogs.value.unshift(log); // 新日志添加到前面
+    // 最多保留100条日志
+    if (operationLogs.value.length > 100) {
+        operationLogs.value = operationLogs.value.slice(0, 100);
+    }
+};
 // 方法定义
 const loadData = async () => {
     loading.value = true;
@@ -207,11 +227,20 @@ const handleRefresh = () => {
     loadData();
 };
 const handleValueChange = (row) => {
+    // 获取原始值用于日志记录
+    const originalRow = originalEnvVars.value.find(v => v.key === row.key && v.type === row.type);
     row.isValid = validateEnvironmentVariable(row.key);
     checkChanges();
+    // 如果值真的发生了变化，记录日志
+    if (originalRow && originalRow.value !== row.value) {
+        const category = row.type === 'alias' ? '别名' : '环境变量';
+        addOperationLog('update', category, row.key, `修改了${category} "${row.key}" 的值`, originalRow.value, row.value);
+    }
     scheduleAutoSave();
 };
 const handleKeyChange = (row) => {
+    // 获取原始值用于日志记录
+    const originalRow = originalEnvVars.value.find(v => v.key === row.key && v.type === row.type);
     // 验证变量名
     row.isValid = isVarNameValid(row.key);
     // 更新分类
@@ -220,6 +249,11 @@ const handleKeyChange = (row) => {
     }
     else {
         row.category = '别名';
+    }
+    // 如果键名真的发生了变化，记录日志
+    if (originalRow && originalRow.key !== row.key) {
+        const category = row.type === 'alias' ? '别名' : '环境变量';
+        addOperationLog('update', category, originalRow.key, `修改了${category} "${originalRow.key}" 的名称为 "${row.key}"`, originalRow.key, row.key);
     }
     checkChanges();
     scheduleAutoSave();
@@ -256,7 +290,7 @@ const handleAddConfirm = async () => {
             }
             // 添加到数组
             envVars.value.push({
-                key: newVar.key.toUpperCase(),
+                key: newVar.key,
                 value: newVar.value,
                 type: newVar.type,
                 isValid: true,
@@ -265,8 +299,20 @@ const handleAddConfirm = async () => {
             envVars.value.sort((a, b) => a.key.localeCompare(b.key));
             // 自动保存到文件
             await saveChangesToFile();
+            // 记录操作日志
+            const logCategory = newVar.type === 'alias' ? '别名' : '环境变量';
+            addOperationLog('create', logCategory, newVar.key, `添加了${logCategory} "${newVar.key}"`, undefined, newVar.value);
             dialogVisible.value = false;
             const itemType = newVar.type === 'alias' ? '别名' : '环境变量';
+            // 跳转到对应的类别视图
+            if (newVar.type === 'alias') {
+                viewType.value = 'alias';
+                selectedCategory.value = 'all';
+            }
+            else {
+                viewType.value = 'env';
+                selectedCategory.value = 'all';
+            }
             ElMessage.success(`${itemType}已添加并保存`);
         }
         else {
@@ -322,6 +368,8 @@ const handleDelete = async (index) => {
             // 自动保存到文件
             const success = await saveChangesToFile();
             if (success) {
+                // 记录操作日志
+                addOperationLog('delete', itemType, item.key, `删除了${itemType} "${item.key}"`, item.value, undefined);
                 ElMessage.success(`${itemType}已删除并保存`);
             }
         }
@@ -331,9 +379,39 @@ const handleDelete = async (index) => {
 const handleSave = async () => {
     saving.value = true;
     try {
-        const success = await saveChangesToFile();
-        if (success) {
-            ElMessage.success('保存成功');
+        let success = false;
+        if (viewType.value === 'source') {
+            // 源码编辑模式：保存源码内容
+            sourceSaving.value = true;
+            try {
+                const result = await window.electronAPI.saveConfigFileContent({
+                    content: sourceContent.value,
+                    filePath: sourceFilePath.value
+                });
+                if (result.success) {
+                    originalSourceContent.value = sourceContent.value;
+                    ElMessage.success(result.message || '配置文件已保存');
+                    // 重新加载环境变量数据
+                    await loadData();
+                    success = true;
+                }
+                else {
+                    ElMessage.error(result.error || '保存失败');
+                }
+            }
+            catch (err) {
+                ElMessage.error(`保存失败: ${err?.message || String(err)}`);
+            }
+            finally {
+                sourceSaving.value = false;
+            }
+        }
+        else {
+            // 普通模式：保存环境变量
+            success = await saveChangesToFile();
+            if (success) {
+                ElMessage.success('保存成功');
+            }
         }
     }
     finally {
@@ -455,30 +533,6 @@ const loadSourceContent = async () => {
         sourceLoading.value = false;
     }
 };
-const saveSourceContent = async () => {
-    sourceSaving.value = true;
-    try {
-        const result = await window.electronAPI.saveConfigFileContent({
-            content: sourceContent.value,
-            filePath: sourceFilePath.value
-        });
-        if (result.success) {
-            originalSourceContent.value = sourceContent.value;
-            ElMessage.success(result.message || '配置文件已保存');
-            // 重新加载环境变量数据
-            await loadData();
-        }
-        else {
-            ElMessage.error(result.error || '保存失败');
-        }
-    }
-    catch (err) {
-        ElMessage.error(`保存失败: ${err?.message || String(err)}`);
-    }
-    finally {
-        sourceSaving.value = false;
-    }
-};
 const handleSourceContentChange = () => {
     // 检查源码是否有变化
     const hasSourceChanges = sourceContent.value !== originalSourceContent.value;
@@ -494,6 +548,9 @@ const handleViewTypeChange = () => {
 // 处理下拉菜单命令
 const handleDropdownCommand = (command) => {
     switch (command) {
+        case 'logs':
+            showLogsDialog.value = true;
+            break;
         case 'feedback':
             openGitHubIssue();
             break;
@@ -501,6 +558,38 @@ const handleDropdownCommand = (command) => {
             showAboutDialog();
             break;
     }
+};
+// 格式化时间
+const formatTime = (timestamp) => {
+    const now = new Date();
+    const diff = now.getTime() - timestamp.getTime();
+    if (diff < 60000) { // 1分钟内
+        return '刚刚';
+    }
+    else if (diff < 3600000) { // 1小时内
+        return `${Math.floor(diff / 60000)}分钟前`;
+    }
+    else if (diff < 86400000) { // 24小时内
+        return `${Math.floor(diff / 3600000)}小时前`;
+    }
+    else {
+        return timestamp.toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+};
+// 清空日志
+const clearLogs = () => {
+    ElMessageBox.confirm('确定要清空所有操作日志吗？', '确认清空', {
+        type: 'warning'
+    }).then(() => {
+        operationLogs.value = [];
+        ElMessage.success('操作日志已清空');
+    }).catch(() => { });
 };
 // 打开GitHub Issues页面
 const openGitHubIssue = async () => {
@@ -573,9 +662,9 @@ const showAboutDialog = () => {
         dangerouslyUseHTMLString: true,
         showCancelButton: true,
         confirmButtonText: '访问GitHub项目',
-        cancelButtonText: '关闭',
-        type: 'info'
-    }).then(async () => {
+        cancelButtonText: '关闭'
+    })
+        .then(async () => {
         // 点击"访问GitHub项目"按钮时打开GitHub链接
         try {
             const repoUrl = 'https://github.com/156554395/mac-env-editor';
@@ -590,7 +679,8 @@ const showAboutDialog = () => {
             console.error('Failed to open GitHub page:', error);
             ElMessage.error('无法打开GitHub项目页面');
         }
-    }).catch(() => {
+    })
+        .catch(() => {
         // 点击"关闭"按钮或按ESC键，不做任何操作
     });
 };
@@ -631,10 +721,6 @@ if (__VLS_ctx.shellInfo) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "shell-info-badge" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "shell-name" },
-    });
-    (__VLS_ctx.shellInfo.shellName);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "config-path" },
     });
@@ -771,10 +857,10 @@ var __VLS_35;
     /** @type {[typeof __VLS_components.ElDropdownItem, typeof __VLS_components.elDropdownItem, typeof __VLS_components.ElDropdownItem, typeof __VLS_components.elDropdownItem, ]} */ ;
     // @ts-ignore
     const __VLS_49 = __VLS_asFunctionalComponent(__VLS_48, new __VLS_48({
-        command: "feedback",
+        command: "logs",
     }));
     const __VLS_50 = __VLS_49({
-        command: "feedback",
+        command: "logs",
     }, ...__VLS_functionalComponentArgsRest(__VLS_49));
     __VLS_51.slots.default;
     const __VLS_52 = {}.ElIcon;
@@ -783,8 +869,8 @@ var __VLS_35;
     const __VLS_53 = __VLS_asFunctionalComponent(__VLS_52, new __VLS_52({}));
     const __VLS_54 = __VLS_53({}, ...__VLS_functionalComponentArgsRest(__VLS_53));
     __VLS_55.slots.default;
-    const __VLS_56 = {}.ChatDotRound;
-    /** @type {[typeof __VLS_components.ChatDotRound, ]} */ ;
+    const __VLS_56 = {}.Document;
+    /** @type {[typeof __VLS_components.Document, ]} */ ;
     // @ts-ignore
     const __VLS_57 = __VLS_asFunctionalComponent(__VLS_56, new __VLS_56({}));
     const __VLS_58 = __VLS_57({}, ...__VLS_functionalComponentArgsRest(__VLS_57));
@@ -794,10 +880,10 @@ var __VLS_35;
     /** @type {[typeof __VLS_components.ElDropdownItem, typeof __VLS_components.elDropdownItem, typeof __VLS_components.ElDropdownItem, typeof __VLS_components.elDropdownItem, ]} */ ;
     // @ts-ignore
     const __VLS_61 = __VLS_asFunctionalComponent(__VLS_60, new __VLS_60({
-        command: "about",
+        command: "feedback",
     }));
     const __VLS_62 = __VLS_61({
-        command: "about",
+        command: "feedback",
     }, ...__VLS_functionalComponentArgsRest(__VLS_61));
     __VLS_63.slots.default;
     const __VLS_64 = {}.ElIcon;
@@ -806,13 +892,36 @@ var __VLS_35;
     const __VLS_65 = __VLS_asFunctionalComponent(__VLS_64, new __VLS_64({}));
     const __VLS_66 = __VLS_65({}, ...__VLS_functionalComponentArgsRest(__VLS_65));
     __VLS_67.slots.default;
-    const __VLS_68 = {}.InfoFilled;
-    /** @type {[typeof __VLS_components.InfoFilled, ]} */ ;
+    const __VLS_68 = {}.ChatDotRound;
+    /** @type {[typeof __VLS_components.ChatDotRound, ]} */ ;
     // @ts-ignore
     const __VLS_69 = __VLS_asFunctionalComponent(__VLS_68, new __VLS_68({}));
     const __VLS_70 = __VLS_69({}, ...__VLS_functionalComponentArgsRest(__VLS_69));
     var __VLS_67;
     var __VLS_63;
+    const __VLS_72 = {}.ElDropdownItem;
+    /** @type {[typeof __VLS_components.ElDropdownItem, typeof __VLS_components.elDropdownItem, typeof __VLS_components.ElDropdownItem, typeof __VLS_components.elDropdownItem, ]} */ ;
+    // @ts-ignore
+    const __VLS_73 = __VLS_asFunctionalComponent(__VLS_72, new __VLS_72({
+        command: "about",
+    }));
+    const __VLS_74 = __VLS_73({
+        command: "about",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_73));
+    __VLS_75.slots.default;
+    const __VLS_76 = {}.ElIcon;
+    /** @type {[typeof __VLS_components.ElIcon, typeof __VLS_components.elIcon, typeof __VLS_components.ElIcon, typeof __VLS_components.elIcon, ]} */ ;
+    // @ts-ignore
+    const __VLS_77 = __VLS_asFunctionalComponent(__VLS_76, new __VLS_76({}));
+    const __VLS_78 = __VLS_77({}, ...__VLS_functionalComponentArgsRest(__VLS_77));
+    __VLS_79.slots.default;
+    const __VLS_80 = {}.InfoFilled;
+    /** @type {[typeof __VLS_components.InfoFilled, ]} */ ;
+    // @ts-ignore
+    const __VLS_81 = __VLS_asFunctionalComponent(__VLS_80, new __VLS_80({}));
+    const __VLS_82 = __VLS_81({}, ...__VLS_functionalComponentArgsRest(__VLS_81));
+    var __VLS_79;
+    var __VLS_75;
     var __VLS_47;
 }
 var __VLS_27;
@@ -828,28 +937,28 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
 __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({
     ...{ class: "panel-title" },
 });
-const __VLS_72 = {}.ElSegmented;
+const __VLS_84 = {}.ElSegmented;
 /** @type {[typeof __VLS_components.ElSegmented, typeof __VLS_components.elSegmented, ]} */ ;
 // @ts-ignore
-const __VLS_73 = __VLS_asFunctionalComponent(__VLS_72, new __VLS_72({
+const __VLS_85 = __VLS_asFunctionalComponent(__VLS_84, new __VLS_84({
     ...{ 'onChange': {} },
     modelValue: (__VLS_ctx.viewType),
     options: (__VLS_ctx.viewOptions),
     size: "large",
 }));
-const __VLS_74 = __VLS_73({
+const __VLS_86 = __VLS_85({
     ...{ 'onChange': {} },
     modelValue: (__VLS_ctx.viewType),
     options: (__VLS_ctx.viewOptions),
     size: "large",
-}, ...__VLS_functionalComponentArgsRest(__VLS_73));
-let __VLS_76;
-let __VLS_77;
-let __VLS_78;
-const __VLS_79 = {
+}, ...__VLS_functionalComponentArgsRest(__VLS_85));
+let __VLS_88;
+let __VLS_89;
+let __VLS_90;
+const __VLS_91 = {
     onChange: (__VLS_ctx.handleViewTypeChange)
 };
-var __VLS_75;
+var __VLS_87;
 if (__VLS_ctx.viewType === 'all') {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "category-filter" },
@@ -951,109 +1060,111 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "toolbar-right" },
 });
-const __VLS_80 = {}.ElInput;
+const __VLS_92 = {}.ElInput;
 /** @type {[typeof __VLS_components.ElInput, typeof __VLS_components.elInput, ]} */ ;
 // @ts-ignore
-const __VLS_81 = __VLS_asFunctionalComponent(__VLS_80, new __VLS_80({
-    modelValue: (__VLS_ctx.searchQuery),
-    placeholder: "搜索环境变量或别名...",
-    ...{ class: "search-input" },
-    clearable: true,
-    prefixIcon: ('Search'),
-}));
-const __VLS_82 = __VLS_81({
-    modelValue: (__VLS_ctx.searchQuery),
-    placeholder: "搜索环境变量或别名...",
-    ...{ class: "search-input" },
-    clearable: true,
-    prefixIcon: ('Search'),
-}, ...__VLS_functionalComponentArgsRest(__VLS_81));
-const __VLS_84 = {}.ElDropdown;
-/** @type {[typeof __VLS_components.ElDropdown, typeof __VLS_components.elDropdown, typeof __VLS_components.ElDropdown, typeof __VLS_components.elDropdown, ]} */ ;
-// @ts-ignore
-const __VLS_85 = __VLS_asFunctionalComponent(__VLS_84, new __VLS_84({
-    ...{ 'onCommand': {} },
-    trigger: "click",
-}));
-const __VLS_86 = __VLS_85({
-    ...{ 'onCommand': {} },
-    trigger: "click",
-}, ...__VLS_functionalComponentArgsRest(__VLS_85));
-let __VLS_88;
-let __VLS_89;
-let __VLS_90;
-const __VLS_91 = {
-    onCommand: (__VLS_ctx.handleAddCommand)
-};
-__VLS_87.slots.default;
-const __VLS_92 = {}.ElButton;
-/** @type {[typeof __VLS_components.ElButton, typeof __VLS_components.elButton, typeof __VLS_components.ElButton, typeof __VLS_components.elButton, ]} */ ;
-// @ts-ignore
 const __VLS_93 = __VLS_asFunctionalComponent(__VLS_92, new __VLS_92({
-    type: "primary",
+    modelValue: (__VLS_ctx.searchQuery),
+    placeholder: "搜索环境变量或别名...",
+    ...{ class: "search-input" },
+    clearable: true,
     size: "large",
-    icon: ('Plus'),
+    prefixIcon: ('Search'),
 }));
 const __VLS_94 = __VLS_93({
+    modelValue: (__VLS_ctx.searchQuery),
+    placeholder: "搜索环境变量或别名...",
+    ...{ class: "search-input" },
+    clearable: true,
+    size: "large",
+    prefixIcon: ('Search'),
+}, ...__VLS_functionalComponentArgsRest(__VLS_93));
+const __VLS_96 = {}.ElDropdown;
+/** @type {[typeof __VLS_components.ElDropdown, typeof __VLS_components.elDropdown, typeof __VLS_components.ElDropdown, typeof __VLS_components.elDropdown, ]} */ ;
+// @ts-ignore
+const __VLS_97 = __VLS_asFunctionalComponent(__VLS_96, new __VLS_96({
+    ...{ 'onCommand': {} },
+    trigger: "click",
+}));
+const __VLS_98 = __VLS_97({
+    ...{ 'onCommand': {} },
+    trigger: "click",
+}, ...__VLS_functionalComponentArgsRest(__VLS_97));
+let __VLS_100;
+let __VLS_101;
+let __VLS_102;
+const __VLS_103 = {
+    onCommand: (__VLS_ctx.handleAddCommand)
+};
+__VLS_99.slots.default;
+const __VLS_104 = {}.ElButton;
+/** @type {[typeof __VLS_components.ElButton, typeof __VLS_components.elButton, typeof __VLS_components.ElButton, typeof __VLS_components.elButton, ]} */ ;
+// @ts-ignore
+const __VLS_105 = __VLS_asFunctionalComponent(__VLS_104, new __VLS_104({
     type: "primary",
     size: "large",
     icon: ('Plus'),
-}, ...__VLS_functionalComponentArgsRest(__VLS_93));
-__VLS_95.slots.default;
-const __VLS_96 = {}.ElIcon;
+}));
+const __VLS_106 = __VLS_105({
+    type: "primary",
+    size: "large",
+    icon: ('Plus'),
+}, ...__VLS_functionalComponentArgsRest(__VLS_105));
+__VLS_107.slots.default;
+const __VLS_108 = {}.ElIcon;
 /** @type {[typeof __VLS_components.ElIcon, typeof __VLS_components.elIcon, typeof __VLS_components.ElIcon, typeof __VLS_components.elIcon, ]} */ ;
 // @ts-ignore
-const __VLS_97 = __VLS_asFunctionalComponent(__VLS_96, new __VLS_96({
+const __VLS_109 = __VLS_asFunctionalComponent(__VLS_108, new __VLS_108({
     ...{ class: "el-icon--right" },
 }));
-const __VLS_98 = __VLS_97({
+const __VLS_110 = __VLS_109({
     ...{ class: "el-icon--right" },
-}, ...__VLS_functionalComponentArgsRest(__VLS_97));
-__VLS_99.slots.default;
-const __VLS_100 = {}.ArrowDown;
+}, ...__VLS_functionalComponentArgsRest(__VLS_109));
+__VLS_111.slots.default;
+const __VLS_112 = {}.ArrowDown;
 /** @type {[typeof __VLS_components.ArrowDown, typeof __VLS_components.arrowDown, ]} */ ;
 // @ts-ignore
-const __VLS_101 = __VLS_asFunctionalComponent(__VLS_100, new __VLS_100({}));
-const __VLS_102 = __VLS_101({}, ...__VLS_functionalComponentArgsRest(__VLS_101));
-var __VLS_99;
-var __VLS_95;
+const __VLS_113 = __VLS_asFunctionalComponent(__VLS_112, new __VLS_112({}));
+const __VLS_114 = __VLS_113({}, ...__VLS_functionalComponentArgsRest(__VLS_113));
+var __VLS_111;
+var __VLS_107;
 {
-    const { dropdown: __VLS_thisSlot } = __VLS_87.slots;
-    const __VLS_104 = {}.ElDropdownMenu;
+    const { dropdown: __VLS_thisSlot } = __VLS_99.slots;
+    const __VLS_116 = {}.ElDropdownMenu;
     /** @type {[typeof __VLS_components.ElDropdownMenu, typeof __VLS_components.elDropdownMenu, typeof __VLS_components.ElDropdownMenu, typeof __VLS_components.elDropdownMenu, ]} */ ;
     // @ts-ignore
-    const __VLS_105 = __VLS_asFunctionalComponent(__VLS_104, new __VLS_104({}));
-    const __VLS_106 = __VLS_105({}, ...__VLS_functionalComponentArgsRest(__VLS_105));
-    __VLS_107.slots.default;
-    const __VLS_108 = {}.ElDropdownItem;
+    const __VLS_117 = __VLS_asFunctionalComponent(__VLS_116, new __VLS_116({}));
+    const __VLS_118 = __VLS_117({}, ...__VLS_functionalComponentArgsRest(__VLS_117));
+    __VLS_119.slots.default;
+    const __VLS_120 = {}.ElDropdownItem;
     /** @type {[typeof __VLS_components.ElDropdownItem, typeof __VLS_components.elDropdownItem, typeof __VLS_components.ElDropdownItem, typeof __VLS_components.elDropdownItem, ]} */ ;
     // @ts-ignore
-    const __VLS_109 = __VLS_asFunctionalComponent(__VLS_108, new __VLS_108({
+    const __VLS_121 = __VLS_asFunctionalComponent(__VLS_120, new __VLS_120({
         command: "env",
         icon: ('Setting'),
     }));
-    const __VLS_110 = __VLS_109({
+    const __VLS_122 = __VLS_121({
         command: "env",
         icon: ('Setting'),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_109));
-    __VLS_111.slots.default;
-    var __VLS_111;
-    const __VLS_112 = {}.ElDropdownItem;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_121));
+    __VLS_123.slots.default;
+    var __VLS_123;
+    const __VLS_124 = {}.ElDropdownItem;
     /** @type {[typeof __VLS_components.ElDropdownItem, typeof __VLS_components.elDropdownItem, typeof __VLS_components.ElDropdownItem, typeof __VLS_components.elDropdownItem, ]} */ ;
     // @ts-ignore
-    const __VLS_113 = __VLS_asFunctionalComponent(__VLS_112, new __VLS_112({
+    const __VLS_125 = __VLS_asFunctionalComponent(__VLS_124, new __VLS_124({
         command: "alias",
         icon: ('Link'),
     }));
-    const __VLS_114 = __VLS_113({
+    const __VLS_126 = __VLS_125({
         command: "alias",
         icon: ('Link'),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_113));
-    __VLS_115.slots.default;
-    var __VLS_115;
-    var __VLS_107;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_125));
+    __VLS_127.slots.default;
+    var __VLS_127;
+    var __VLS_119;
 }
-var __VLS_87;
+var __VLS_99;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "workspace-content" },
 });
@@ -1061,17 +1172,17 @@ if (__VLS_ctx.loading) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "loading-state" },
     });
-    const __VLS_116 = {}.ElSkeleton;
+    const __VLS_128 = {}.ElSkeleton;
     /** @type {[typeof __VLS_components.ElSkeleton, typeof __VLS_components.elSkeleton, ]} */ ;
     // @ts-ignore
-    const __VLS_117 = __VLS_asFunctionalComponent(__VLS_116, new __VLS_116({
+    const __VLS_129 = __VLS_asFunctionalComponent(__VLS_128, new __VLS_128({
         rows: (8),
         animated: true,
     }));
-    const __VLS_118 = __VLS_117({
+    const __VLS_130 = __VLS_129({
         rows: (8),
         animated: true,
-    }, ...__VLS_functionalComponentArgsRest(__VLS_117));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_129));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "loading-text" },
     });
@@ -1080,43 +1191,43 @@ else if (__VLS_ctx.error) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "error-state" },
     });
-    const __VLS_120 = {}.ElResult;
+    const __VLS_132 = {}.ElResult;
     /** @type {[typeof __VLS_components.ElResult, typeof __VLS_components.elResult, typeof __VLS_components.ElResult, typeof __VLS_components.elResult, ]} */ ;
     // @ts-ignore
-    const __VLS_121 = __VLS_asFunctionalComponent(__VLS_120, new __VLS_120({
+    const __VLS_133 = __VLS_asFunctionalComponent(__VLS_132, new __VLS_132({
         icon: "error",
         title: "加载失败",
         subTitle: (__VLS_ctx.error),
     }));
-    const __VLS_122 = __VLS_121({
+    const __VLS_134 = __VLS_133({
         icon: "error",
         title: "加载失败",
         subTitle: (__VLS_ctx.error),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_121));
-    __VLS_123.slots.default;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_133));
+    __VLS_135.slots.default;
     {
-        const { extra: __VLS_thisSlot } = __VLS_123.slots;
-        const __VLS_124 = {}.ElButton;
+        const { extra: __VLS_thisSlot } = __VLS_135.slots;
+        const __VLS_136 = {}.ElButton;
         /** @type {[typeof __VLS_components.ElButton, typeof __VLS_components.elButton, typeof __VLS_components.ElButton, typeof __VLS_components.elButton, ]} */ ;
         // @ts-ignore
-        const __VLS_125 = __VLS_asFunctionalComponent(__VLS_124, new __VLS_124({
+        const __VLS_137 = __VLS_asFunctionalComponent(__VLS_136, new __VLS_136({
             ...{ 'onClick': {} },
             type: "primary",
         }));
-        const __VLS_126 = __VLS_125({
+        const __VLS_138 = __VLS_137({
             ...{ 'onClick': {} },
             type: "primary",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_125));
-        let __VLS_128;
-        let __VLS_129;
-        let __VLS_130;
-        const __VLS_131 = {
+        }, ...__VLS_functionalComponentArgsRest(__VLS_137));
+        let __VLS_140;
+        let __VLS_141;
+        let __VLS_142;
+        const __VLS_143 = {
             onClick: (__VLS_ctx.handleRefresh)
         };
-        __VLS_127.slots.default;
-        var __VLS_127;
+        __VLS_139.slots.default;
+        var __VLS_139;
     }
-    var __VLS_123;
+    var __VLS_135;
 }
 else if (__VLS_ctx.viewType === 'source') {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1126,17 +1237,17 @@ else if (__VLS_ctx.viewType === 'source') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "loading-state" },
         });
-        const __VLS_132 = {}.ElSkeleton;
+        const __VLS_144 = {}.ElSkeleton;
         /** @type {[typeof __VLS_components.ElSkeleton, typeof __VLS_components.elSkeleton, ]} */ ;
         // @ts-ignore
-        const __VLS_133 = __VLS_asFunctionalComponent(__VLS_132, new __VLS_132({
+        const __VLS_145 = __VLS_asFunctionalComponent(__VLS_144, new __VLS_144({
             rows: (8),
             animated: true,
         }));
-        const __VLS_134 = __VLS_133({
+        const __VLS_146 = __VLS_145({
             rows: (8),
             animated: true,
-        }, ...__VLS_functionalComponentArgsRest(__VLS_133));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_145));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "loading-text" },
         });
@@ -1145,59 +1256,6 @@ else if (__VLS_ctx.viewType === 'source') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "source-editor" },
         });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "source-editor-toolbar" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "toolbar-left" },
-        });
-        const __VLS_136 = {}.ElTag;
-        /** @type {[typeof __VLS_components.ElTag, typeof __VLS_components.elTag, typeof __VLS_components.ElTag, typeof __VLS_components.elTag, ]} */ ;
-        // @ts-ignore
-        const __VLS_137 = __VLS_asFunctionalComponent(__VLS_136, new __VLS_136({
-            type: "info",
-            size: "large",
-        }));
-        const __VLS_138 = __VLS_137({
-            type: "info",
-            size: "large",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_137));
-        __VLS_139.slots.default;
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
-            ...{ class: "el-icon-document" },
-        });
-        (__VLS_ctx.sourceFilePath);
-        var __VLS_139;
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "toolbar-right" },
-        });
-        const __VLS_140 = {}.ElButton;
-        /** @type {[typeof __VLS_components.ElButton, typeof __VLS_components.elButton, typeof __VLS_components.ElButton, typeof __VLS_components.elButton, ]} */ ;
-        // @ts-ignore
-        const __VLS_141 = __VLS_asFunctionalComponent(__VLS_140, new __VLS_140({
-            ...{ 'onClick': {} },
-            type: "success",
-            icon: ('Check'),
-            loading: (__VLS_ctx.sourceSaving),
-            disabled: (!__VLS_ctx.hasChanges),
-            size: "large",
-        }));
-        const __VLS_142 = __VLS_141({
-            ...{ 'onClick': {} },
-            type: "success",
-            icon: ('Check'),
-            loading: (__VLS_ctx.sourceSaving),
-            disabled: (!__VLS_ctx.hasChanges),
-            size: "large",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_141));
-        let __VLS_144;
-        let __VLS_145;
-        let __VLS_146;
-        const __VLS_147 = {
-            onClick: (__VLS_ctx.saveSourceContent)
-        };
-        __VLS_143.slots.default;
-        var __VLS_143;
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "source-editor-content" },
         });
@@ -1634,12 +1692,14 @@ const __VLS_246 = {}.ElInput;
 // @ts-ignore
 const __VLS_247 = __VLS_asFunctionalComponent(__VLS_246, new __VLS_246({
     modelValue: (__VLS_ctx.newVar.key),
+    modelModifiers: { trim: true, },
     placeholder: (__VLS_ctx.getKeyPlaceholder()),
     ...{ class: ({ 'invalid-input': !__VLS_ctx.isVarNameValid(__VLS_ctx.newVar.key) }) },
     size: "large",
 }));
 const __VLS_248 = __VLS_247({
     modelValue: (__VLS_ctx.newVar.key),
+    modelModifiers: { trim: true, },
     placeholder: (__VLS_ctx.getKeyPlaceholder()),
     ...{ class: ({ 'invalid-input': !__VLS_ctx.isVarNameValid(__VLS_ctx.newVar.key) }) },
     size: "large",
@@ -1662,11 +1722,13 @@ const __VLS_254 = {}.ElInput;
 // @ts-ignore
 const __VLS_255 = __VLS_asFunctionalComponent(__VLS_254, new __VLS_254({
     modelValue: (__VLS_ctx.newVar.value),
+    modelModifiers: { trim: true, },
     placeholder: (__VLS_ctx.getValuePlaceholder()),
     size: "large",
 }));
 const __VLS_256 = __VLS_255({
     modelValue: (__VLS_ctx.newVar.value),
+    modelModifiers: { trim: true, },
     placeholder: (__VLS_ctx.getValuePlaceholder()),
     size: "large",
 }, ...__VLS_functionalComponentArgsRest(__VLS_255));
@@ -1721,6 +1783,209 @@ var __VLS_223;
     var __VLS_269;
 }
 var __VLS_219;
+const __VLS_274 = {}.ElDialog;
+/** @type {[typeof __VLS_components.ElDialog, typeof __VLS_components.elDialog, typeof __VLS_components.ElDialog, typeof __VLS_components.elDialog, ]} */ ;
+// @ts-ignore
+const __VLS_275 = __VLS_asFunctionalComponent(__VLS_274, new __VLS_274({
+    modelValue: (__VLS_ctx.showLogsDialog),
+    title: "操作日志",
+    width: "80%",
+    ...{ class: "logs-dialog" },
+}));
+const __VLS_276 = __VLS_275({
+    modelValue: (__VLS_ctx.showLogsDialog),
+    title: "操作日志",
+    width: "80%",
+    ...{ class: "logs-dialog" },
+}, ...__VLS_functionalComponentArgsRest(__VLS_275));
+__VLS_277.slots.default;
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "logs-container" },
+});
+if (__VLS_ctx.operationLogs.length === 0) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "empty-logs" },
+    });
+    const __VLS_278 = {}.ElResult;
+    /** @type {[typeof __VLS_components.ElResult, typeof __VLS_components.elResult, ]} */ ;
+    // @ts-ignore
+    const __VLS_279 = __VLS_asFunctionalComponent(__VLS_278, new __VLS_278({
+        icon: "info",
+        title: "暂无操作日志",
+        subTitle: "开始使用应用后，操作记录将显示在这里",
+    }));
+    const __VLS_280 = __VLS_279({
+        icon: "info",
+        title: "暂无操作日志",
+        subTitle: "开始使用应用后，操作记录将显示在这里",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_279));
+}
+else {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "logs-list" },
+    });
+    for (const [log] of __VLS_getVForSourceType((__VLS_ctx.operationLogs))) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            key: (log.id),
+            ...{ class: "log-item" },
+            ...{ class: (`log-${log.type}`) },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "log-header" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "log-type-icon" },
+        });
+        if (log.type === 'create') {
+            const __VLS_282 = {}.ElIcon;
+            /** @type {[typeof __VLS_components.ElIcon, typeof __VLS_components.elIcon, typeof __VLS_components.ElIcon, typeof __VLS_components.elIcon, ]} */ ;
+            // @ts-ignore
+            const __VLS_283 = __VLS_asFunctionalComponent(__VLS_282, new __VLS_282({
+                ...{ class: "create-icon" },
+            }));
+            const __VLS_284 = __VLS_283({
+                ...{ class: "create-icon" },
+            }, ...__VLS_functionalComponentArgsRest(__VLS_283));
+            __VLS_285.slots.default;
+            const __VLS_286 = {}.Plus;
+            /** @type {[typeof __VLS_components.Plus, ]} */ ;
+            // @ts-ignore
+            const __VLS_287 = __VLS_asFunctionalComponent(__VLS_286, new __VLS_286({}));
+            const __VLS_288 = __VLS_287({}, ...__VLS_functionalComponentArgsRest(__VLS_287));
+            var __VLS_285;
+        }
+        if (log.type === 'update') {
+            const __VLS_290 = {}.ElIcon;
+            /** @type {[typeof __VLS_components.ElIcon, typeof __VLS_components.elIcon, typeof __VLS_components.ElIcon, typeof __VLS_components.elIcon, ]} */ ;
+            // @ts-ignore
+            const __VLS_291 = __VLS_asFunctionalComponent(__VLS_290, new __VLS_290({
+                ...{ class: "update-icon" },
+            }));
+            const __VLS_292 = __VLS_291({
+                ...{ class: "update-icon" },
+            }, ...__VLS_functionalComponentArgsRest(__VLS_291));
+            __VLS_293.slots.default;
+            const __VLS_294 = {}.Edit;
+            /** @type {[typeof __VLS_components.Edit, ]} */ ;
+            // @ts-ignore
+            const __VLS_295 = __VLS_asFunctionalComponent(__VLS_294, new __VLS_294({}));
+            const __VLS_296 = __VLS_295({}, ...__VLS_functionalComponentArgsRest(__VLS_295));
+            var __VLS_293;
+        }
+        if (log.type === 'delete') {
+            const __VLS_298 = {}.ElIcon;
+            /** @type {[typeof __VLS_components.ElIcon, typeof __VLS_components.elIcon, typeof __VLS_components.ElIcon, typeof __VLS_components.elIcon, ]} */ ;
+            // @ts-ignore
+            const __VLS_299 = __VLS_asFunctionalComponent(__VLS_298, new __VLS_298({
+                ...{ class: "delete-icon" },
+            }));
+            const __VLS_300 = __VLS_299({
+                ...{ class: "delete-icon" },
+            }, ...__VLS_functionalComponentArgsRest(__VLS_299));
+            __VLS_301.slots.default;
+            const __VLS_302 = {}.Delete;
+            /** @type {[typeof __VLS_components.Delete, ]} */ ;
+            // @ts-ignore
+            const __VLS_303 = __VLS_asFunctionalComponent(__VLS_302, new __VLS_302({}));
+            const __VLS_304 = __VLS_303({}, ...__VLS_functionalComponentArgsRest(__VLS_303));
+            var __VLS_301;
+        }
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "log-content" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "log-description" },
+        });
+        (log.description);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "log-details" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "log-category" },
+        });
+        (log.category);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "log-time" },
+        });
+        (__VLS_ctx.formatTime(log.timestamp));
+        if (log.oldValue || log.newValue) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "log-values" },
+            });
+            if (log.oldValue) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                    ...{ class: "log-old-value" },
+                });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                    ...{ class: "label" },
+                });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                    ...{ class: "value" },
+                });
+                (log.oldValue);
+            }
+            if (log.newValue) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                    ...{ class: "log-new-value" },
+                });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                    ...{ class: "label" },
+                });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                    ...{ class: "value" },
+                });
+                (log.newValue);
+            }
+        }
+    }
+}
+{
+    const { footer: __VLS_thisSlot } = __VLS_277.slots;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "dialog-footer" },
+    });
+    const __VLS_306 = {}.ElButton;
+    /** @type {[typeof __VLS_components.ElButton, typeof __VLS_components.elButton, typeof __VLS_components.ElButton, typeof __VLS_components.elButton, ]} */ ;
+    // @ts-ignore
+    const __VLS_307 = __VLS_asFunctionalComponent(__VLS_306, new __VLS_306({
+        ...{ 'onClick': {} },
+        type: "danger",
+        plain: true,
+    }));
+    const __VLS_308 = __VLS_307({
+        ...{ 'onClick': {} },
+        type: "danger",
+        plain: true,
+    }, ...__VLS_functionalComponentArgsRest(__VLS_307));
+    let __VLS_310;
+    let __VLS_311;
+    let __VLS_312;
+    const __VLS_313 = {
+        onClick: (__VLS_ctx.clearLogs)
+    };
+    __VLS_309.slots.default;
+    var __VLS_309;
+    const __VLS_314 = {}.ElButton;
+    /** @type {[typeof __VLS_components.ElButton, typeof __VLS_components.elButton, typeof __VLS_components.ElButton, typeof __VLS_components.elButton, ]} */ ;
+    // @ts-ignore
+    const __VLS_315 = __VLS_asFunctionalComponent(__VLS_314, new __VLS_314({
+        ...{ 'onClick': {} },
+    }));
+    const __VLS_316 = __VLS_315({
+        ...{ 'onClick': {} },
+    }, ...__VLS_functionalComponentArgsRest(__VLS_315));
+    let __VLS_318;
+    let __VLS_319;
+    let __VLS_320;
+    const __VLS_321 = {
+        onClick: (...[$event]) => {
+            __VLS_ctx.showLogsDialog = false;
+        }
+    };
+    __VLS_317.slots.default;
+    var __VLS_317;
+}
+var __VLS_277;
 /** @type {__VLS_StyleScopedClasses['app-container']} */ ;
 /** @type {__VLS_StyleScopedClasses['app-header']} */ ;
 /** @type {__VLS_StyleScopedClasses['header-left']} */ ;
@@ -1728,7 +1993,6 @@ var __VLS_219;
 /** @type {__VLS_StyleScopedClasses['logo-icon']} */ ;
 /** @type {__VLS_StyleScopedClasses['app-title']} */ ;
 /** @type {__VLS_StyleScopedClasses['shell-info-badge']} */ ;
-/** @type {__VLS_StyleScopedClasses['shell-name']} */ ;
 /** @type {__VLS_StyleScopedClasses['config-path']} */ ;
 /** @type {__VLS_StyleScopedClasses['header-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['el-icon--right']} */ ;
@@ -1773,10 +2037,6 @@ var __VLS_219;
 /** @type {__VLS_StyleScopedClasses['loading-state']} */ ;
 /** @type {__VLS_StyleScopedClasses['loading-text']} */ ;
 /** @type {__VLS_StyleScopedClasses['source-editor']} */ ;
-/** @type {__VLS_StyleScopedClasses['source-editor-toolbar']} */ ;
-/** @type {__VLS_StyleScopedClasses['toolbar-left']} */ ;
-/** @type {__VLS_StyleScopedClasses['el-icon-document']} */ ;
-/** @type {__VLS_StyleScopedClasses['toolbar-right']} */ ;
 /** @type {__VLS_StyleScopedClasses['source-editor-content']} */ ;
 /** @type {__VLS_StyleScopedClasses['source-textarea']} */ ;
 /** @type {__VLS_StyleScopedClasses['source-editor-footer']} */ ;
@@ -1790,6 +2050,29 @@ var __VLS_219;
 /** @type {__VLS_StyleScopedClasses['key-input']} */ ;
 /** @type {__VLS_StyleScopedClasses['add-dialog']} */ ;
 /** @type {__VLS_StyleScopedClasses['dialog-footer']} */ ;
+/** @type {__VLS_StyleScopedClasses['logs-dialog']} */ ;
+/** @type {__VLS_StyleScopedClasses['logs-container']} */ ;
+/** @type {__VLS_StyleScopedClasses['empty-logs']} */ ;
+/** @type {__VLS_StyleScopedClasses['logs-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-header']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-type-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['create-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['update-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['delete-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-content']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-description']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-details']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-category']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-time']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-values']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-old-value']} */ ;
+/** @type {__VLS_StyleScopedClasses['label']} */ ;
+/** @type {__VLS_StyleScopedClasses['value']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-new-value']} */ ;
+/** @type {__VLS_StyleScopedClasses['label']} */ ;
+/** @type {__VLS_StyleScopedClasses['value']} */ ;
+/** @type {__VLS_StyleScopedClasses['dialog-footer']} */ ;
 // @ts-ignore
 var __VLS_225 = __VLS_224;
 var __VLS_dollars;
@@ -1799,12 +2082,18 @@ const __VLS_self = (await import('vue')).defineComponent({
             ArrowDown: ArrowDown,
             ChatDotRound: ChatDotRound,
             InfoFilled: InfoFilled,
+            Document: Document,
+            Plus: Plus,
+            Edit: Edit,
+            Delete: Delete,
             envVars: envVars,
             shellInfo: shellInfo,
             loading: loading,
             saving: saving,
             viewType: viewType,
             selectedCategory: selectedCategory,
+            operationLogs: operationLogs,
+            showLogsDialog: showLogsDialog,
             categories: categories,
             viewOptions: viewOptions,
             getEmptyDescription: getEmptyDescription,
@@ -1813,9 +2102,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             searchQuery: searchQuery,
             hasChanges: hasChanges,
             sourceContent: sourceContent,
-            sourceFilePath: sourceFilePath,
             sourceLoading: sourceLoading,
-            sourceSaving: sourceSaving,
             dialogVisible: dialogVisible,
             varForm: varForm,
             newVar: newVar,
@@ -1842,10 +2129,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             getRowClassName: getRowClassName,
             handleAddCommand: handleAddCommand,
             getCurrentTitle: getCurrentTitle,
-            saveSourceContent: saveSourceContent,
             handleSourceContentChange: handleSourceContentChange,
             handleViewTypeChange: handleViewTypeChange,
             handleDropdownCommand: handleDropdownCommand,
+            formatTime: formatTime,
+            clearLogs: clearLogs,
         };
     },
 });

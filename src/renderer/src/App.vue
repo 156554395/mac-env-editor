@@ -47,6 +47,10 @@
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
+              <el-dropdown-item command="logs">
+                <el-icon><Document /></el-icon>
+                操作日志
+              </el-dropdown-item>
               <el-dropdown-item command="feedback">
                 <el-icon><ChatDotRound /></el-icon>
                 问题反馈
@@ -362,13 +366,106 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 操作日志对话框 -->
+    <el-dialog
+      v-model="showLogsDialog"
+      title="操作日志"
+      width="80%"
+      class="logs-dialog"
+    >
+      <div class="logs-container">
+        <div v-if="operationLogs.length === 0" class="empty-logs">
+          <el-result
+            icon="info"
+            title="暂无操作日志"
+            sub-title="开始使用应用后，操作记录将显示在这里"
+          />
+        </div>
+        <div v-else class="logs-list">
+          <div
+            v-for="log in operationLogs"
+            :key="log.id"
+            class="log-item"
+            :class="`log-${log.type}`"
+          >
+            <div class="log-header">
+              <div class="log-type-icon">
+                <el-icon v-if="log.type === 'create'" class="create-icon"
+                  ><Plus
+                /></el-icon>
+                <el-icon v-if="log.type === 'update'" class="update-icon"
+                  ><Edit
+                /></el-icon>
+                <el-icon v-if="log.type === 'delete'" class="delete-icon"
+                  ><Delete
+                /></el-icon>
+              </div>
+              <div class="log-content">
+                <div class="log-description">{{ log.description }}</div>
+                <div class="log-details">
+                  <span class="log-category">{{ log.category }}</span>
+                  <span class="log-time">{{ formatTime(log.timestamp) }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="log.oldValue || log.newValue" class="log-values">
+              <div v-if="log.oldValue" class="log-old-value">
+                <span class="label">原值:</span>
+                <div class="value-container">
+                  <span class="value">{{ log.oldValue }}</span>
+                  <el-button
+                    type="text"
+                    size="small"
+                    class="copy-btn"
+                    @click="copyToClipboard(log.fullOldValue || log.oldValue)"
+                    :icon="CopyDocument"
+                    title="复制原值"
+                  />
+                </div>
+              </div>
+              <div v-if="log.newValue" class="log-new-value">
+                <span class="label">新值:</span>
+                <div class="value-container">
+                  <span class="value">{{ log.newValue }}</span>
+                  <el-button
+                    type="text"
+                    size="small"
+                    class="copy-btn"
+                    @click="copyToClipboard(log.fullNewValue || log.newValue)"
+                    :icon="CopyDocument"
+                    title="复制新值"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button type="danger" plain @click="clearLogs">清空日志</el-button>
+          <el-button @click="showLogsDialog = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, ChatDotRound, InfoFilled } from '@element-plus/icons-vue'
+import {
+  ArrowDown,
+  ChatDotRound,
+  InfoFilled,
+  Document,
+  Plus,
+  Edit,
+  Delete,
+  CopyDocument
+} from '@element-plus/icons-vue'
 import { EnvironmentVariable, ShellInfo, EnvData } from '../../types'
 
 declare global {
@@ -417,6 +514,50 @@ const loading = ref(false)
 const saving = ref(false)
 const viewType = ref('all')
 const selectedCategory = ref('all')
+
+// 操作日志相关状态
+interface OperationLog {
+  id: string
+  type: 'create' | 'update' | 'delete'
+  category: '环境变量' | '别名'
+  key: string
+  oldValue?: string
+  newValue?: string
+  fullOldValue?: string  // 完整的原值（用于复制）
+  fullNewValue?: string  // 完整的新值（用于复制）
+  timestamp: Date
+  description: string
+}
+
+const operationLogs = ref<OperationLog[]>([])
+const showLogsDialog = ref(false)
+
+// 从本地存储加载操作日志
+const loadOperationLogs = () => {
+  try {
+    const savedLogs = localStorage.getItem('env-editor-operation-logs')
+    if (savedLogs) {
+      const parsed = JSON.parse(savedLogs)
+      // 将时间戳字符串转换回 Date 对象
+      operationLogs.value = parsed.map((log: any) => ({
+        ...log,
+        timestamp: new Date(log.timestamp)
+      }))
+    }
+  } catch (error) {
+    console.error('加载操作日志失败:', error)
+    operationLogs.value = []
+  }
+}
+
+// 保存操作日志到本地存储
+const saveOperationLogs = () => {
+  try {
+    localStorage.setItem('env-editor-operation-logs', JSON.stringify(operationLogs.value))
+  } catch (error) {
+    console.error('保存操作日志失败:', error)
+  }
+}
 
 // 分类定义
 const categories = ref([
@@ -580,6 +721,41 @@ const filteredEnvVars = computed(() => {
   return filtered
 })
 
+// 操作日志记录函数
+const addOperationLog = (
+  type: 'create' | 'update' | 'delete',
+  category: '环境变量' | '别名',
+  key: string,
+  description: string,
+  oldValue?: string,
+  newValue?: string,
+  fullOldValue?: string,
+  fullNewValue?: string
+) => {
+  const log: OperationLog = {
+    id: Date.now().toString() + Math.random().toString(36).substring(2, 11),
+    type,
+    category,
+    key,
+    oldValue,
+    newValue,
+    fullOldValue,
+    fullNewValue,
+    timestamp: new Date(),
+    description
+  }
+
+  operationLogs.value.unshift(log) // 新日志添加到前面
+
+  // 最多保留100条日志
+  if (operationLogs.value.length > 100) {
+    operationLogs.value = operationLogs.value.slice(0, 100)
+  }
+
+  // 保存到本地存储
+  saveOperationLogs()
+}
+
 // 方法定义
 const loadData = async () => {
   loading.value = true
@@ -638,7 +814,8 @@ const handleRefresh = () => {
 }
 
 const handleValueChange = (row: EnvironmentVariable) => {
-  row.isValid = validateEnvironmentVariable(row.key)
+  // 验证变量名有效性（别名和环境变量都用相同的规则）
+  row.isValid = isVarNameValid(row.key)
   checkChanges()
   scheduleAutoSave()
 }
@@ -709,6 +886,17 @@ const handleAddConfirm = async () => {
       // 自动保存到文件
       await saveChangesToFile()
 
+      // 记录操作日志
+      const logCategory = newVar.type === 'alias' ? '别名' : '环境变量'
+      addOperationLog(
+        'create',
+        logCategory,
+        newVar.key,
+        `添加了${logCategory} "${newVar.key}"`,
+        undefined,
+        newVar.value
+      )
+
       dialogVisible.value = false
       const itemType = newVar.type === 'alias' ? '别名' : '环境变量'
 
@@ -749,6 +937,9 @@ const saveChangesToFile = async () => {
     const result = await window.electronAPI.saveEnvVars(envData)
 
     if (result.success) {
+      // 在更新原始数据之前记录变化日志
+      recordChangeLogs()
+
       originalEnvVars.value = JSON.parse(JSON.stringify(envVars.value))
       hasChanges.value = false
       return true
@@ -760,6 +951,61 @@ const saveChangesToFile = async () => {
     ElMessage.error(`保存失败: ${err?.message || String(err)}`)
     return false
   }
+}
+
+// 记录变化日志
+const recordChangeLogs = () => {
+  // 检测修改和新增
+  envVars.value.forEach(current => {
+    const original = originalEnvVars.value.find(
+      o => o.key === current.key && o.type === current.type
+    )
+
+    if (original) {
+      // 检测值变化
+      if (original.value !== current.value) {
+        const category = current.type === 'alias' ? '别名' : '环境变量'
+        addOperationLog(
+          'update',
+          category,
+          current.key,
+          `修改了${category} "${current.key}" 的值`,
+          original.value,
+          current.value
+        )
+      }
+    } else {
+      // 检测新增（这种情况应该很少，因为新增通常通过 handleAddConfirm）
+      const category = current.type === 'alias' ? '别名' : '环境变量'
+      addOperationLog(
+        'create',
+        category,
+        current.key,
+        `添加了${category} "${current.key}"`,
+        undefined,
+        current.value
+      )
+    }
+  })
+
+  // 检测删除（在原始数组中但当前数组中找不到的项）
+  originalEnvVars.value.forEach(original => {
+    const current = envVars.value.find(
+      c => c.key === original.key && c.type === original.type
+    )
+
+    if (!current) {
+      const category = original.type === 'alias' ? '别名' : '环境变量'
+      addOperationLog(
+        'delete',
+        category,
+        original.key,
+        `删除了${category} "${original.key}"`,
+        original.value,
+        undefined
+      )
+    }
+  })
 }
 
 const handleDelete = async (index: number) => {
@@ -781,6 +1027,16 @@ const handleDelete = async (index: number) => {
         // 自动保存到文件
         const success = await saveChangesToFile()
         if (success) {
+          // 记录操作日志
+          addOperationLog(
+            'delete',
+            itemType,
+            item.key,
+            `删除了${itemType} "${item.key}"`,
+            item.value,
+            undefined
+          )
+
           ElMessage.success(`${itemType}已删除并保存`)
         }
       }
@@ -804,7 +1060,24 @@ const handleSave = async () => {
         })
 
         if (result.success) {
+          // 记录源码编辑操作日志（在更新原始内容之前）
+          addOperationLog(
+            'update',
+            '环境变量',
+            sourceFileName.value || '配置文件',
+            `修改了配置文件 "${sourceFileName.value || '配置文件'}" 的源码内容`,
+            originalSourceContent.value.length > 300 ?
+              originalSourceContent.value.substring(0, 300) + '...' :
+              originalSourceContent.value,
+            sourceContent.value.length > 300 ?
+              sourceContent.value.substring(0, 300) + '...' :
+              sourceContent.value,
+            originalSourceContent.value,  // 完整的原值
+            sourceContent.value           // 完整的新值
+          )
+
           originalSourceContent.value = sourceContent.value
+
           ElMessage.success(result.message || '配置文件已保存')
           // 重新加载环境变量数据
           await loadData()
@@ -965,6 +1238,9 @@ const handleViewTypeChange = () => {
 // 处理下拉菜单命令
 const handleDropdownCommand = (command: string) => {
   switch (command) {
+    case 'logs':
+      showLogsDialog.value = true
+      break
     case 'feedback':
       openGitHubIssue()
       break
@@ -972,6 +1248,56 @@ const handleDropdownCommand = (command: string) => {
       showAboutDialog()
       break
   }
+}
+
+// 复制文本到剪贴板
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制到剪贴板')
+  } catch (err) {
+    console.error('复制失败:', err)
+    ElMessage.error('复制失败')
+  }
+}
+
+// 格式化时间
+const formatTime = (timestamp: Date) => {
+  const now = new Date()
+  const diff = now.getTime() - timestamp.getTime()
+
+  if (diff < 60000) {
+    // 1分钟内
+    return '刚刚'
+  } else if (diff < 3600000) {
+    // 1小时内
+    return `${Math.floor(diff / 60000)}分钟前`
+  } else if (diff < 86400000) {
+    // 24小时内
+    return `${Math.floor(diff / 3600000)}小时前`
+  } else {
+    return timestamp.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+}
+
+// 清空日志
+const clearLogs = () => {
+  ElMessageBox.confirm('确定要清空所有操作日志吗？', '确认清空', {
+    type: 'warning'
+  })
+    .then(() => {
+      operationLogs.value = []
+      // 清空本地存储
+      localStorage.removeItem('env-editor-operation-logs')
+      ElMessage.success('操作日志已清空')
+    })
+    .catch(() => {})
 }
 
 // 打开GitHub Issues页面
@@ -982,7 +1308,7 @@ const openGitHubIssue = async () => {
   // 获取系统信息用于问题模板
   const systemInfo = {
     userAgent: navigator.userAgent,
-    platform: navigator.platform,
+    platform: navigator.userAgent.includes('Mac') ? 'macOS' : 'Unknown',
     appVersion: '1.1.0'
   }
 
@@ -1073,6 +1399,7 @@ const showAboutDialog = () => {
 // 生命周期
 onMounted(() => {
   loadData()
+  loadOperationLogs()
 })
 
 onBeforeUnmount(() => {
@@ -1655,5 +1982,235 @@ onBeforeUnmount(() => {
 .change-indicator {
   color: #f59e0b;
   font-weight: 600;
+}
+
+/* 操作日志样式 */
+.logs-dialog .el-dialog {
+  border-radius: 16px;
+}
+
+.logs-container {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.empty-logs {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.log-item {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.3s ease;
+}
+
+.log-item:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.log-item.log-create {
+  border-left: 4px solid #67c23a;
+}
+
+.log-item.log-update {
+  border-left: 4px solid #e6a23c;
+}
+
+.log-item.log-delete {
+  border-left: 4px solid #f56c6c;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.log-type-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.log-create .create-icon {
+  color: #67c23a;
+  background: rgba(103, 194, 58, 0.1);
+  border-radius: 50%;
+  padding: 8px;
+}
+
+.log-update .update-icon {
+  color: #e6a23c;
+  background: rgba(230, 162, 60, 0.1);
+  border-radius: 50%;
+  padding: 8px;
+}
+
+.log-delete .delete-icon {
+  color: #f56c6c;
+  background: rgba(245, 108, 108, 0.1);
+  border-radius: 50%;
+  padding: 8px;
+}
+
+.log-content {
+  flex: 1;
+}
+
+.log-description {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.log-details {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.log-category {
+  background: rgba(103, 126, 234, 0.1);
+  color: #667eea;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.log-time {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.log-values {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.log-old-value,
+.log-new-value {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.log-old-value .label {
+  color: #f56c6c;
+  font-weight: 600;
+  min-width: 40px;
+  margin-top: 4px;
+}
+
+.log-new-value .label {
+  color: #67c23a;
+  font-weight: 600;
+  min-width: 40px;
+  margin-top: 4px;
+}
+
+.value-container {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.log-old-value .value {
+  flex: 1;
+  background: rgba(245, 108, 108, 0.1);
+  color: #f56c6c;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-all;
+  white-space: pre-wrap;
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid rgba(245, 108, 108, 0.2);
+}
+
+.log-new-value .value {
+  flex: 1;
+  background: rgba(103, 194, 58, 0.1);
+  color: #67c23a;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-all;
+  white-space: pre-wrap;
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid rgba(103, 194, 58, 0.2);
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  padding: 4px !important;
+  margin: 0 !important;
+  min-height: auto !important;
+  height: 24px !important;
+  width: 24px !important;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.copy-btn:hover {
+  color: #409eff;
+  background: rgba(64, 158, 255, 0.1) !important;
+}
+
+/* 滚动条样式 */
+.log-old-value .value::-webkit-scrollbar,
+.log-new-value .value::-webkit-scrollbar {
+  width: 6px;
+}
+
+.log-old-value .value::-webkit-scrollbar-track,
+.log-new-value .value::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+.log-old-value .value::-webkit-scrollbar-thumb {
+  background: rgba(245, 108, 108, 0.3);
+  border-radius: 3px;
+}
+
+.log-old-value .value::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 108, 108, 0.5);
+}
+
+.log-new-value .value::-webkit-scrollbar-thumb {
+  background: rgba(103, 194, 58, 0.3);
+  border-radius: 3px;
+}
+
+.log-new-value .value::-webkit-scrollbar-thumb:hover {
+  background: rgba(103, 194, 58, 0.5);
 }
 </style>
