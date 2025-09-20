@@ -16,6 +16,7 @@
     "dev:main": "tsc src/main/*.ts --outDir dist --target es2020 --module commonjs --moduleResolution node && NODE_ENV=development electron dist/main.js",
     "dev:renderer": "vite",
     "build": "vue-tsc && vite build && electron-builder",
+    "build:dist": "vue-tsc && vite build && electron-builder --publish=never",
     "build:main": "tsc src/main/*.ts --outDir dist --target es2020 --module commonjs --moduleResolution node",
     "build:renderer": "vue-tsc && vite build",
     "postinstall": "electron-builder install-app-deps",

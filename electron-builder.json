@@ -26,9 +26,12 @@
     "target": "dmg",
     "category": "public.app-category.utilities",
     "icon": "build/Icon.icns",
-    "hardenedRuntime": false,
+    "hardenedRuntime": true,
     "gatekeeperAssess": false,
-    "notarize": false
+    "notarize": false,
+    "identity": null,
+    "entitlements": "build/entitlements.plist",
+    "entitlementsInherit": "build/entitlements.plist"
   },
   "dmg": {
     "title": "Mac Env Editor ${version}",

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, Tray, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage } from 'electron';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
@@ -42,9 +42,8 @@ class EnvEditor {
         });
     }
     createTray() {
-        const { nativeImage } = require('electron');
         // 使用提供的图标文件
-        let trayIcon;
+        let trayIcon = null;
         console.log('托盘图标路径查找:');
         // 根据环境确定路径查找策略
         const isPackaged = app.isPackaged;
@@ -160,7 +159,6 @@ class EnvEditor {
     }
     createWindow() {
         // 设置应用图标
-        const { nativeImage } = require('electron');
         let appIcon = null;
         // 尝试加载现有图标文件，开发环境和生产环境
         const iconPaths = [

@@ -435,11 +435,11 @@ const handleSave = async () => {
                 });
                 if (result.success) {
                     // 记录源码编辑操作日志（在更新原始内容之前）
-                    addOperationLog('update', '环境变量', sourceFileName.value || '配置文件', `修改了配置文件 "${sourceFileName.value || '配置文件'}" 的源码内容`, originalSourceContent.value.length > 300 ?
-                        originalSourceContent.value.substring(0, 300) + '...' :
-                        originalSourceContent.value, sourceContent.value.length > 300 ?
-                        sourceContent.value.substring(0, 300) + '...' :
-                        sourceContent.value, originalSourceContent.value, // 完整的原值
+                    addOperationLog('update', '环境变量', sourceFileName.value || '配置文件', `修改了配置文件 "${sourceFileName.value || '配置文件'}" 的源码内容`, originalSourceContent.value.length > 300
+                        ? originalSourceContent.value.substring(0, 300) + '...'
+                        : originalSourceContent.value, sourceContent.value.length > 300
+                        ? sourceContent.value.substring(0, 300) + '...'
+                        : sourceContent.value, originalSourceContent.value, // 完整的原值
                     sourceContent.value // 完整的新值
                     );
                     originalSourceContent.value = sourceContent.value;
